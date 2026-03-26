@@ -1,78 +1,221 @@
-import { useState } from "react";
-import { BrowserRouter as Router, Routes, Route, Link } from "react-router-dom";
+import { useState, createContext, useContext, useEffect } from "react";
+import { BrowserRouter as Router, Routes, Route, Link, useLocation } from "react-router-dom";
 import PasswordGenerator from './features/passwordgenerator/PasswordGenerator';
 import PasswordChecker from './features/passwordchecker/PasswordChecker';
 import VaultDashboard from './features/vault/AddPasswordForm';
 
-// 1. We isolate your exact tab logic into its own component for the home page
-function MainTools() {
-  const [activeTab, setActiveTab] = useState("generator");
+/* ── Theme Context ──────────────────────────────────────────────────────── */
+export const ThemeContext = createContext(null);
+export function useTheme() { return useContext(ThemeContext); }
+
+function ThemeProvider({ children }) {
+  const [theme, setTheme] = useState(() => localStorage.getItem("hs-theme") || "dark");
+
+  useEffect(() => {
+    const root = document.documentElement;
+    if (theme === "dark") root.classList.add("dark");
+    else root.classList.remove("dark");
+    localStorage.setItem("hs-theme", theme);
+  }, [theme]);
+
+  const toggle = () => setTheme(t => t === "dark" ? "light" : "dark");
+  return (
+    <ThemeContext.Provider value={{ theme, toggle }}>
+      {children}
+    </ThemeContext.Provider>
+  );
+}
+
+/* ── Icons ──────────────────────────────────────────────────────────────── */
+function SunIcon() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24"
+      fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="4"/>
+      <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/>
+    </svg>
+  );
+}
+function MoonIcon() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24"
+      fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+    </svg>
+  );
+}
+function LockIcon() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24"
+      fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <rect width="18" height="11" x="3" y="11" rx="2" ry="2"/>
+      <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+    </svg>
+  );
+}
+function VaultIcon() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"
+      fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect width="18" height="18" x="3" y="3" rx="2"/>
+      <circle cx="12" cy="12" r="3"/>
+      <path d="M12 9v-3M12 18v-3M9 12H6M18 12h-3"/>
+    </svg>
+  );
+}
+
+/* ── Navbar ─────────────────────────────────────────────────────────────── */
+function Navbar() {
+  const { theme, toggle } = useTheme();
+  const location = useLocation();
+
+  const navLink = (to, label) => {
+    const active = location.pathname === to;
+    return (
+      <Link
+        to={to}
+        style={{
+          color: active ? "hsl(var(--foreground))" : "hsl(var(--muted-foreground))",
+          fontWeight: active ? "600" : "500",
+          padding: "0.45rem 0.85rem",
+          borderRadius: "var(--radius)",
+          backgroundColor: active ? "hsl(var(--muted))" : "transparent",
+          transition: "all 0.15s",
+          fontSize: "0.875rem",
+          textDecoration: "none",
+        }}
+      >
+        {label}
+      </Link>
+    );
+  };
 
   return (
-    <div className="flex flex-col items-center justify-center w-full">
-      <div className="w-full max-w-2xl mb-8 flex space-x-4">
-        <button
-          onClick={() => setActiveTab("checker")}
-          className={`flex-1 py-3 rounded-lg shadow font-medium ${activeTab === "checker" ? "bg-[#1e293b] text-emerald-400 border border-slate-600" : "bg-[#0f172a] text-slate-400"}`}
-        >
-          🔍 Strength Checker
-        </button>
-        <button
-          onClick={() => setActiveTab("generator")}
-          className={`flex-1 py-3 rounded-lg shadow font-medium ${activeTab === "generator" ? "bg-linear-to-r from-purple-600 to-indigo-600 text-white" : "bg-[#0f172a] text-slate-400"}`}
-        >
-          ⚡ Password Generator
-        </button>
+    <header
+      className="navbar-glass"
+      style={{
+        position: "sticky",
+        top: 0,
+        zIndex: 50,
+        width: "100%",
+      }}
+    >
+      <div style={{
+        maxWidth: "1100px",
+        margin: "0 auto",
+        padding: "0 1.5rem",
+        height: "60px",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: "1rem",
+      }}>
+        {/* Logo on the left */}
+        <Link to="/" style={{ textDecoration: "none", display: "flex", alignItems: "center", gap: "0.5rem" }}>
+          <span style={{ color: "hsl(var(--primary))" }}>
+            <LockIcon />
+          </span>
+          <span style={{
+            fontWeight: "800",
+            fontSize: "1.15rem",
+            color: "hsl(var(--foreground))",
+            letterSpacing: "-0.02em",
+          }}>
+            Hash<span style={{ color: "hsl(var(--primary))" }}>Secure</span>
+          </span>
+        </Link>
+        
+        {/* Nav Links and Theme Toggle on the right */}
+        <div style={{ display: "flex", alignItems: "center", gap: "1.25rem" }}>
+          <nav style={{ display: "flex", gap: "0.25rem" }}>
+            {navLink("/", "Vault")}
+            {navLink("/tools", "Tools")}
+          </nav>
+
+          <button
+            onClick={toggle}
+            className="btn-ghost"
+            style={{ padding: "0.45rem", lineHeight: 0 }}
+            title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+          >
+            {theme === "dark" ? <SunIcon /> : <MoonIcon />}
+          </button>
+        </div>
+      </div>
+    </header>
+  );
+}
+
+/* ── Main Tools (tab page) ─────────────────────────────────────────────── */
+function MainTools() {
+  const [activeTab, setActiveTab] = useState("checker");
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", width: "100%" }}>
+      {/* Tab switcher */}
+      <div style={{
+        display: "flex",
+        gap: "0.5rem",
+        padding: "0.35rem",
+        backgroundColor: "hsl(var(--muted))",
+        borderRadius: "calc(var(--radius) + 4px)",
+        marginBottom: "2rem",
+        width: "100%",
+        maxWidth: "500px",
+      }}>
+        {[
+          { key: "checker", label: "🔍 Strength Checker" },
+          { key: "generator", label: "⚡ Password Generator" },
+        ].map(tab => (
+          <button
+            key={tab.key}
+            onClick={() => setActiveTab(tab.key)}
+            style={{
+              flex: 1,
+              padding: "0.55rem 1rem",
+              borderRadius: "var(--radius)",
+              fontWeight: "600",
+              fontSize: "0.875rem",
+              border: "none",
+              cursor: "pointer",
+              transition: "all 0.18s",
+              backgroundColor: activeTab === tab.key ? "hsl(var(--card))" : "transparent",
+              color: activeTab === tab.key ? "hsl(var(--foreground))" : "hsl(var(--muted-foreground))",
+              boxShadow: activeTab === tab.key ? "0 1px 4px rgba(0,0,0,0.12)" : "none",
+            }}
+          >
+            {tab.label}
+          </button>
+        ))}
       </div>
 
-      <div className="w-full max-w-2xl">
-        {activeTab === "generator" ? (
-          <PasswordGenerator />
-        ) : (
-          <PasswordChecker />
-        )}
+      {/* Content */}
+      <div style={{ width: "100%", maxWidth: "600px" }}>
+        {activeTab === "checker" ? <PasswordChecker /> : <PasswordGenerator />}
       </div>
     </div>
   );
 }
 
-// 2. The main App now handles the Top Navigation and Routing
+/* ── App Root ────────────────────────────────────────────────────────────── */
 export default function App() {
   return (
-    <Router>
-      <div className="min-h-screen bg-[#0b1120] flex flex-col p-6 font-sans">
-        {/* Top Navigation Bar */}
-        <div className="w-full max-w-4xl mx-auto flex justify-between items-center mb-12 pb-4 border-b border-slate-800">
-          <h1 className="text-2xl font-bold text-transparent bg-clip-text bg-linear-to-r from-cyan-400 to-indigo-500 tracking-wide">
-            Smart Pass Manager
-          </h1>
-          <nav className="flex space-x-4 items-center">
-            <Link
-              to="/"
-              className="px-4 py-2 text-slate-300 hover:text-white transition font-medium"
-            >
-              Tools
-            </Link>
-            <Link
-              to="/vault"
-              className="px-5 py-2.5 bg-linear-to-r from-cyan-600 to-blue-600 text-white rounded-lg font-bold shadow-lg hover:opacity-90 transition"
-            >
-              🔐 Secure Vault
-            </Link>
-          </nav>
+    <ThemeProvider>
+      <Router>
+        <div className="bg-background" style={{ minHeight: "100vh" }}>
+          <Navbar />
+          <main style={{
+            maxWidth: "1100px",
+            margin: "0 auto",
+            padding: "2.5rem 1.5rem",
+          }}>
+            <Routes>
+              <Route path="/" element={<VaultDashboard />} />
+              <Route path="/tools" element={<MainTools />} />
+            </Routes>
+          </main>
         </div>
-
-        {/* Page Routing */}
-        <div className="flex-1 flex flex-col items-center">
-          <Routes>
-            {/* The home page renders your exact tab setup */}
-            <Route path="/" element={<MainTools />} />
-
-            {/* The vault page renders completely independently */}
-            <Route path="/vault" element={<VaultDashboard />} />
-          </Routes>
-        </div>
-      </div>
-    </Router>
+      </Router>
+    </ThemeProvider>
   );
 }

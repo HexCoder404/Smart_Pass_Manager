@@ -3,194 +3,173 @@ import { PasswordEngine } from "../../utils/passwordEngine";
 
 export default function PasswordGenerator() {
   const [password, setPassword] = useState("");
-  const [length, setLength] = useState(22);
-  const [upper, setUpper] = useState(true);
-  const [lower, setLower] = useState(true);
-  const [numbers, setNumbers] = useState(true);
-  const [symbols, setSymbols] = useState(true);
+  const [length, setLength]     = useState(22);
+  const [upper, setUpper]       = useState(true);
+  const [lower, setLower]       = useState(true);
+  const [numbers, setNumbers]   = useState(true);
+  const [symbols, setSymbols]   = useState(true);
   const [strength, setStrength] = useState({ score: 0, label: "" });
+  const [copied, setCopied]     = useState(false);
 
-  const generatePassword = () => {
+  const generate = () => {
     if (!upper && !lower && !numbers && !symbols) return;
-
-    // Use the object directly and pass the options it expects
-    const newPass = PasswordEngine.generatePassword(length, {
-      uppercase: upper,
-      lowercase: lower,
-      numbers: numbers,
-      symbols: symbols,
-    });
-
+    const newPass = PasswordEngine.generatePassword(length, { uppercase: upper, lowercase: lower, numbers, symbols });
     setPassword(newPass);
-
-    // Convert the engine's 0-5 score to a 0-100 percentage for your UI
-    const analysis = PasswordEngine.checkStrength(newPass);
-    setStrength({
-      score: (analysis.score / 5) * 100,
-      label: analysis.label,
-    });
+    const a = PasswordEngine.checkStrength(newPass);
+    setStrength({ score: (a.score / 5) * 100, label: a.label });
   };
 
-  const copyToClipboard = () => {
-    if (password) {
-      navigator.clipboard.writeText(password);
-    }
+  const copy = () => {
+    if (!password) return;
+    navigator.clipboard.writeText(password);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   };
 
-  // Dynamic color logic
-  const getColor = (score) => {
-    if (score === 0) return { text: "text-slate-500", bg: "bg-slate-700" };
-    if (score < 25) return { text: "text-red-500", bg: "bg-red-500" };
-    if (score < 50) return { text: "text-orange-500", bg: "bg-orange-500" };
-    if (score < 75) return { text: "text-yellow-500", bg: "bg-yellow-500" };
-    return { text: "text-emerald-500", bg: "bg-emerald-500" };
+  const strengthColor = (s) => {
+    if (s === 0)  return "hsl(var(--border))";
+    if (s < 25)   return "#ef4444";
+    if (s < 50)   return "#f97316";
+    if (s < 75)   return "#eab308";
+    return              "#10b981";
   };
+  const sc = strengthColor(strength.score);
 
-  const colors = getColor(strength.score);
+  const Option = ({ label, checked, onChange }) => (
+    <label style={{
+      display: "flex", alignItems: "center", justifyContent: "space-between",
+      padding: "0.7rem 1rem",
+      border: `1px solid ${checked ? "hsl(var(--primary))" : "hsl(var(--border))"}`,
+      borderRadius: "var(--radius)",
+      cursor: "pointer",
+      transition: "border-color 0.15s",
+      backgroundColor: "hsl(var(--background))",
+    }}>
+      <span style={{
+        fontSize: "0.875rem", fontWeight: "500",
+        color: checked ? "hsl(var(--foreground))" : "hsl(var(--muted-foreground))",
+        transition: "color 0.15s",
+      }}>
+        {label}
+      </span>
+      <input
+        type="checkbox" checked={checked} onChange={e => onChange(e.target.checked)}
+        style={{ accentColor: "hsl(var(--primary))", width: "16px", height: "16px" }}
+      />
+    </label>
+  );
 
   return (
-    <div className="bg-[#111827] border border-slate-700 rounded-2xl p-8 shadow-2xl">
-      <h2 className="text-2xl font-bold text-white mb-2">Password Generator</h2>
-      <p className="text-sm text-slate-400 mb-6">
-        Generate strong, unique passwords with customizable options
+    <div className="card" style={{ padding: "2rem" }}>
+      <h2 className="text-foreground" style={{ fontSize: "1.35rem", fontWeight: "700", marginBottom: "0.35rem" }}>
+        Password Generator
+      </h2>
+      <p className="text-muted-foreground" style={{ fontSize: "0.875rem", marginBottom: "1.75rem" }}>
+        Generate strong, unique passwords with customisable options.
       </p>
 
-      <div className="bg-[#0f172a] border border-slate-700 p-4 rounded-xl mb-6 relative group">
-        <div
-          className={`font-mono text-lg break-all pr-10 min-h-14 flex items-center ${password ? colors.text : "text-slate-600"}`}
-        >
-          {password || <span>Click Generate...</span>}
+      {/* Generated password display */}
+      <div style={{
+        backgroundColor: "hsl(var(--background))",
+        border: "1px solid hsl(var(--border))",
+        borderRadius: "var(--radius)",
+        padding: "1rem 1rem 0.75rem",
+        marginBottom: "1.5rem",
+        position: "relative",
+      }}>
+        <div style={{
+          fontFamily: "'Courier New', monospace",
+          fontSize: "1rem",
+          wordBreak: "break-all",
+          minHeight: "2.5rem",
+          paddingRight: "2.5rem",
+          color: password ? sc : "hsl(var(--muted-foreground))",
+          display: "flex", alignItems: "center",
+        }}>
+          {password || <span style={{ color: "hsl(var(--muted-foreground))" }}>Click Generate…</span>}
         </div>
 
+        {/* Copy button */}
         <button
-          onClick={copyToClipboard}
-          className="absolute top-4 right-4 text-slate-500 hover:text-white transition-colors"
+          onClick={copy}
+          className="btn-ghost"
+          style={{ position: "absolute", top: "0.75rem", right: "0.5rem", padding: "0.3rem", lineHeight: 0 }}
           title="Copy to clipboard"
         >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            width="20"
-            height="20"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <rect width="8" height="4" x="8" y="2" rx="1" ry="1" />
-            <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
-          </svg>
+          {copied ? (
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24"
+              fill="none" stroke="hsl(var(--accent))" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="20 6 9 17 4 12"/>
+            </svg>
+          ) : (
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24"
+              fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect width="8" height="4" x="8" y="2" rx="1" ry="1"/>
+              <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>
+            </svg>
+          )}
         </button>
 
-        <div
-          className={`mt-4 flex justify-between items-center text-xs font-bold mb-1 ${colors.text}`}
-        >
-          <span>Strength</span>
-          <span>
-            {strength.score > 0 ? `${strength.score}% — ${strength.label}` : ""}
-          </span>
-        </div>
-        <div className="w-full bg-slate-700 h-2 rounded-full overflow-hidden">
-          <div
-            className={`${colors.bg} h-full transition-all duration-300`}
-            style={{ width: `${strength.score}%` }}
-          ></div>
+        {/* Strength bar */}
+        <div style={{ marginTop: "0.75rem" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "0.35rem" }}>
+            <span className="text-muted-foreground" style={{ fontSize: "0.75rem", fontWeight: "600" }}>Strength</span>
+            {strength.score > 0 && (
+              <span style={{ fontSize: "0.75rem", fontWeight: "600", color: sc }}>
+                {strength.score}% — {strength.label}
+              </span>
+            )}
+          </div>
+          <div style={{ height: "5px", borderRadius: "999px", backgroundColor: "hsl(var(--border))", overflow: "hidden" }}>
+            <div style={{
+              height: "100%", width: `${strength.score}%`,
+              backgroundColor: sc, borderRadius: "999px",
+              transition: "width 0.4s ease, background-color 0.3s ease",
+            }} />
+          </div>
         </div>
       </div>
 
-      <div className="mb-6">
-        <div className="flex justify-between text-white font-medium mb-2">
-          <span>Length</span>
-          <span className="text-emerald-400 bg-emerald-400/10 px-2 py-1 rounded">
+      {/* Length slider */}
+      <div style={{ marginBottom: "1.5rem" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.6rem" }}>
+          <span className="text-foreground" style={{ fontWeight: "600", fontSize: "0.9rem" }}>Length</span>
+          <span style={{
+            padding: "0.2rem 0.65rem", borderRadius: "var(--radius)",
+            backgroundColor: "hsl(var(--muted))",
+            color: "hsl(var(--foreground))",
+            fontWeight: "700", fontSize: "0.875rem",
+          }}>
             {length}
           </span>
         </div>
         <input
-          type="range"
-          min="6"
-          max="64"
-          value={length}
-          onChange={(e) => setLength(parseInt(e.target.value))}
-          className="w-full accent-emerald-500 cursor-pointer"
+          type="range" min="6" max="64" value={length}
+          onChange={e => setLength(parseInt(e.target.value))}
+          style={{ width: "100%", accentColor: "hsl(var(--primary))", cursor: "pointer" }}
         />
-        <div className="flex justify-between text-xs text-slate-500 mt-1">
-          <span>6</span>
-          <span>64</span>
+        <div style={{ display: "flex", justifyContent: "space-between", marginTop: "0.35rem" }}>
+          <span className="text-muted-foreground" style={{ fontSize: "0.75rem" }}>6</span>
+          <span className="text-muted-foreground" style={{ fontSize: "0.75rem" }}>64</span>
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-4 mb-8">
-        <label
-          className={`flex items-center justify-between p-3 border ${upper ? "border-emerald-500" : "border-slate-700"} bg-[#0f172a] rounded-lg cursor-pointer transition`}
-        >
-          <span
-            className={`${upper ? "text-emerald-400" : "text-slate-400"} text-sm`}
-          >
-            Uppercase (A-Z)
-          </span>
-          <input
-            type="checkbox"
-            checked={upper}
-            onChange={(e) => setUpper(e.target.checked)}
-            className="accent-emerald-500 w-4 h-4"
-          />
-        </label>
-        <label
-          className={`flex items-center justify-between p-3 border ${lower ? "border-emerald-500" : "border-slate-700"} bg-[#0f172a] rounded-lg cursor-pointer transition`}
-        >
-          <span
-            className={`${lower ? "text-emerald-400" : "text-slate-400"} text-sm`}
-          >
-            Lowercase (a-z)
-          </span>
-          <input
-            type="checkbox"
-            checked={lower}
-            onChange={(e) => setLower(e.target.checked)}
-            className="accent-emerald-500 w-4 h-4"
-          />
-        </label>
-        <label
-          className={`flex items-center justify-between p-3 border ${numbers ? "border-emerald-500" : "border-slate-700"} bg-[#0f172a] rounded-lg cursor-pointer transition`}
-        >
-          <span
-            className={`${numbers ? "text-emerald-400" : "text-slate-400"} text-sm`}
-          >
-            Numbers (0-9)
-          </span>
-          <input
-            type="checkbox"
-            checked={numbers}
-            onChange={(e) => setNumbers(e.target.checked)}
-            className="accent-emerald-500 w-4 h-4"
-          />
-        </label>
-        <label
-          className={`flex items-center justify-between p-3 border ${symbols ? "border-emerald-500" : "border-slate-700"} bg-[#0f172a] rounded-lg cursor-pointer transition`}
-        >
-          <span
-            className={`${symbols ? "text-emerald-400" : "text-slate-400"} text-sm`}
-          >
-            Symbols (!@#)
-          </span>
-          <input
-            type="checkbox"
-            checked={symbols}
-            onChange={(e) => setSymbols(e.target.checked)}
-            className="accent-emerald-500 w-4 h-4"
-          />
-        </label>
+      {/* Options */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.65rem", marginBottom: "1.75rem" }}>
+        <Option label="Uppercase (A-Z)" checked={upper}   onChange={setUpper} />
+        <Option label="Lowercase (a-z)" checked={lower}   onChange={setLower} />
+        <Option label="Numbers (0-9)"   checked={numbers} onChange={setNumbers} />
+        <Option label="Symbols (!@#)"   checked={symbols} onChange={setSymbols} />
       </div>
 
-      <div className="flex space-x-4">
-        <button
-          onClick={generatePassword}
-          className="flex-1 py-3 bg-linear-to-r from-fuchsia-500 to-pink-500 text-white rounded-lg font-bold shadow-lg hover:opacity-90 transition"
-        >
-          🔄 Generate
-        </button>
-      </div>
+      {/* Generate button */}
+      <button
+        onClick={generate}
+        className="btn-primary"
+        style={{ width: "100%", padding: "0.8rem", fontSize: "0.95rem" }}
+      >
+        ⚡ Generate
+      </button>
     </div>
   );
 }
