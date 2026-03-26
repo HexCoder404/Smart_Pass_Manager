@@ -25,6 +25,7 @@ export default function PasswordGenerator() {
 
   // Generate a password as soon as the component loads
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     generate();
   }, [generate]);
 
