@@ -57,7 +57,7 @@ export default function PasswordGenerator() {
 
       <div className="bg-[#0f172a] border border-slate-700 p-4 rounded-xl mb-6 relative group">
         <div
-          className={`font-mono text-lg break-all pr-10 min-h-[56px] flex items-center ${password ? colors.text : "text-slate-600"}`}
+          className={`font-mono text-lg break-all pr-10 min-h-14 flex items-center ${password ? colors.text : "text-slate-600"}`}
         >
           {password || <span>Click Generate...</span>}
         </div>
@@ -186,7 +186,7 @@ export default function PasswordGenerator() {
       <div className="flex space-x-4">
         <button
           onClick={generatePassword}
-          className="flex-1 py-3 bg-gradient-to-r from-fuchsia-500 to-pink-500 text-white rounded-lg font-bold shadow-lg hover:opacity-90 transition"
+          className="flex-1 py-3 bg-linear-to-r from-fuchsia-500 to-pink-500 text-white rounded-lg font-bold shadow-lg hover:opacity-90 transition"
         >
           🔄 Generate
         </button>
