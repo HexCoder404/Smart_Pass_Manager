@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { BrowserRouter as Router, Routes, Route, Link } from "react-router-dom";
-import PasswordGenerator from "./features/passwordgenerator/PasswordGenerator";
-import PasswordChecker from "./features/passwordchecker/PasswordChecker";
-import VaultDashboard from "./features/vault/VaultDashboard"; // Adjust path if needed
+import PasswordGenerator from './features/passwordgenerator/PasswordGenerator';
+import PasswordChecker from './features/passwordchecker/PasswordChecker';
+import VaultDashboard from './features/vault/AddPasswordForm';
 
 // 1. We isolate your exact tab logic into its own component for the home page
 function MainTools() {

@@ -5,13 +5,23 @@ export default function PasswordChecker() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
 
-  const engine = new PasswordEngine();
-  const strength = engine.checkStrength(password);
-  const { details } = strength;
+  // Call the engine object directly
+  const analysis = PasswordEngine.checkStrength(password);
+
+  // Convert 0-5 score to 0-100 percentage for the UI
+  const scorePercentage = (analysis.score / 5) * 100;
+
+  // Calculate the character details your UI expects
+  const details = {
+    length: password.length,
+    uppercase: (password.match(/[A-Z]/g) || []).length,
+    lowercase: (password.match(/[a-z]/g) || []).length,
+    numbers: (password.match(/[0-9]/g) || []).length,
+  };
 
   const strokeDasharray = 283;
   const strokeDashoffset =
-    strokeDasharray - (strokeDasharray * strength.score) / 100;
+    strokeDasharray - (strokeDasharray * scorePercentage) / 100;
 
   // Dynamic color logic for HEX (SVG) and Tailwind classes
   const getColor = (score) => {
@@ -26,7 +36,7 @@ export default function PasswordChecker() {
     return { hex: "#10b981", bg: "bg-emerald-500", text: "text-emerald-500" }; // green
   };
 
-  const colors = getColor(strength.score);
+  const colors = getColor(scorePercentage);
 
   return (
     <div className="bg-[#111827] border border-slate-700 rounded-2xl p-8 shadow-2xl">
@@ -117,12 +127,12 @@ export default function PasswordChecker() {
             <span
               className={`text-4xl font-bold ${password ? colors.text : "text-slate-500"}`}
             >
-              {strength.score}
+              {scorePercentage}
             </span>
             <span
               className={`text-xs ${password ? colors.text : "text-slate-500"}`}
             >
-              {strength.label || "Awaiting Input"}
+              {analysis.label || "Awaiting Input"}
             </span>
           </div>
         </div>
@@ -131,7 +141,7 @@ export default function PasswordChecker() {
       <div className="w-full bg-slate-700 h-3 rounded-full overflow-hidden mb-8">
         <div
           className={`${colors.bg} h-full transition-all duration-500 ease-out`}
-          style={{ width: `${strength.score}%` }}
+          style={{ width: `${scorePercentage}%` }}
         ></div>
       </div>
 
