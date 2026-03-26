@@ -25,7 +25,7 @@ function App() {
           onClick={() => setActiveTab("generator")}
           className={`flex-1 py-3 rounded-lg shadow font-medium transition-all duration-200 ${
             activeTab === "generator"
-              ? "bg-gradient-to-r from-purple-600 to-indigo-600 text-white"
+              ? "bg-linear-to-r from-purple-600 to-indigo-600 text-white"
               : "bg-[#0f172a] text-slate-400 hover:bg-[#1e293b]"
           }`}
         >
@@ -36,7 +36,7 @@ function App() {
           onClick={() => setActiveTab("vault")}
           className={`flex-1 py-3 rounded-lg shadow font-medium transition-all duration-200 ${
             activeTab === "vault"
-              ? "bg-gradient-to-r from-cyan-600 to-blue-600 text-white"
+              ? "bg-linear-to-r from-cyan-600 to-blue-600 text-white"
               : "bg-[#0f172a] text-slate-400 hover:bg-[#1e293b]"
           }`}
         >
