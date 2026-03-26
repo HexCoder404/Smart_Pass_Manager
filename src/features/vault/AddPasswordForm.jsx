@@ -1,39 +1,40 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { CryptoService } from "../../utils/crypto";
 import { supabase } from "../../utils/supabase";
+import { PasswordEngine } from "../../utils/passwordEngine"; // Import the engine
 
 const DEMO_SALT = new Uint8Array([
   15, 82, 193, 44, 55, 66, 77, 88, 99, 10, 11, 12, 13, 14, 15, 16,
 ]);
 const SESSION_TIMEOUT_MS = 5 * 60 * 1000;
+const AUTH_LOCK_STRING = "VERIFIED_VAULT_ACCESS";
 
 export default function VaultDashboard() {
   const [isUnlocked, setIsUnlocked] = useState(false);
   const [masterKey, setMasterKey] = useState(null);
-  const [masterPasswordInput, setMasterPasswordInput] = useState("");
-
-  // Vault Initialization State
-  const [isNewVault, setIsNewVault] = useState(null); // null = loading, true = empty db, false = has data
-
-  // Database Data
+  const [pinInput, setPinInput] = useState("");
+  const [isPinSuccess, setIsPinSuccess] = useState(false);
+  const [isNewVault, setIsNewVault] = useState(null);
   const [vaultData, setVaultData] = useState([]);
+  const [activeFilter, setActiveFilter] = useState("All");
 
-  // Reveal Logic State
-  const [revealedItems, setRevealedItems] = useState({}); // Stores { id: { password, description } }
-  const [challengingId, setChallengingId] = useState(null); // Which item is asking for a password
-  const [challengeInput, setChallengeInput] = useState(""); // The password typed into the challenge box
-
-  // Edit State
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [revealedItems, setRevealedItems] = useState({});
+  const [challengingId, setChallengingId] = useState(null);
+  const [challengeInput, setChallengeInput] = useState("");
   const [editingId, setEditingId] = useState(null);
+  const [copyingId, setCopyingId] = useState(null);
+
   const [formData, setFormData] = useState({
     platform_title: "",
     url: "",
     account_label: "",
     password: "",
     description: "",
+    platform_type: "Website",
   });
 
-  const timeoutRef = useRef(null);
+  const pinRef = useRef(null);
 
   const lockVault = useCallback(() => {
     setMasterKey(null);
@@ -42,520 +43,488 @@ export default function VaultDashboard() {
     setChallengingId(null);
     setEditingId(null);
     setIsUnlocked(false);
+    setIsModalOpen(false);
+    setPinInput("");
+    setIsPinSuccess(false);
   }, []);
 
-  const resetTimer = useCallback(() => {
-    if (timeoutRef.current) clearTimeout(timeoutRef.current);
-    if (isUnlocked) {
-      timeoutRef.current = setTimeout(() => {
-        lockVault();
-        alert("Vault locked due to inactivity.");
-      }, SESSION_TIMEOUT_MS);
-    }
-  }, [isUnlocked, lockVault]);
-
-  // Check if vault is new on mount
   useEffect(() => {
     const checkVaultStatus = async () => {
-      const { count, error } = await supabase
-        .from("vault_entries")
-        .select("*", { count: "exact", head: true });
-
-      if (!error) {
-        setIsNewVault(count === 0);
-      }
+      const { data, error } = await supabase
+        .from("vault_settings")
+        .select("*")
+        .limit(1);
+      if (!error) setIsNewVault(data.length === 0);
     };
     checkVaultStatus();
   }, []);
 
-  useEffect(() => {
-    window.addEventListener("mousemove", resetTimer);
-    window.addEventListener("keydown", resetTimer);
-    return () => {
-      window.removeEventListener("mousemove", resetTimer);
-      window.removeEventListener("keydown", resetTimer);
-      if (timeoutRef.current) clearTimeout(timeoutRef.current);
-    };
-  }, [resetTimer]);
+  const handlePinChange = (e) => {
+    const val = e.target.value;
+    if (/^\d{0,4}$/.test(val)) {
+      setPinInput(val);
+      if (val.length === 4) attemptUnlock(val);
+    }
+  };
 
-  // --- ACTIONS ---
-
-  // 1. Create a brand new vault
-  const handleCreateVault = async (e) => {
-    e.preventDefault();
+  const attemptUnlock = async (finalPin) => {
     try {
-      const key = await CryptoService.deriveKey(masterPasswordInput, DEMO_SALT);
+      const key = await CryptoService.deriveKey(finalPin, DEMO_SALT);
+      if (isNewVault) {
+        const { ciphertext, iv } = await CryptoService.encryptData(
+          key,
+          AUTH_LOCK_STRING,
+        );
+        await supabase
+          .from("vault_settings")
+          .insert([{ pin_hash: JSON.stringify({ ciphertext, iv }) }]);
+        finishUnlock(key, []);
+      } else {
+        const { data } = await supabase
+          .from("vault_settings")
+          .select("pin_hash")
+          .single();
+        const { ciphertext, iv } = JSON.parse(data.pin_hash);
+        const decrypted = await CryptoService.decryptData(key, ciphertext, iv);
+        if (decrypted === AUTH_LOCK_STRING) {
+          const { data: entries } = await supabase
+            .from("vault_entries")
+            .select("*")
+            .order("created_at", { ascending: false });
+          finishUnlock(key, entries || []);
+        }
+      }
+    // eslint-disable-next-line no-unused-vars
+    } catch (error) {
+      alert("Invalid Access PIN.");
+      setPinInput("");
+    }
+  };
+
+  const finishUnlock = (key, data) => {
+    setIsPinSuccess(true);
+    setTimeout(() => {
       setMasterKey(key);
+      setVaultData(data);
       setIsUnlocked(true);
       setIsNewVault(false);
-      resetTimer();
-      setMasterPasswordInput("");
-      // eslint-disable-next-line no-unused-vars
-    } catch (error) {
-      alert("Failed to create Master Key.");
-    }
+      setPinInput("");
+    }, 300);
   };
 
-  // 2. Unlock existing vault
-  const handleUnlock = async (e) => {
+  const handleRevealChallenge = async (e, entry) => {
     e.preventDefault();
+    if (challengeInput.length !== 4) return;
     try {
-      const key = await CryptoService.deriveKey(masterPasswordInput, DEMO_SALT);
-
-      const { data, error } = await supabase
-        .from("vault_entries")
-        .select("*")
-        .order("created_at", { ascending: false });
-
-      if (error) throw error;
-
-      // Verify password by attempting to decrypt the first item
-      if (data.length > 0) {
-        await CryptoService.decryptData(key, data[0].ciphertext, data[0].iv);
-      }
-
-      setMasterKey(key);
-      setVaultData(data); // Store ENCRYPTED data in state!
-      setIsUnlocked(true);
-      resetTimer();
-      setMasterPasswordInput("");
-    } catch (error) {
-      console.error(error);
-      alert("Incorrect Master Password.");
-    }
-  };
-
-  // 3. Challenge user to view a specific password
-  const handleReveal = async (e, entry) => {
-    e.preventDefault();
-    try {
-      // Derive key from what they JUST typed into the challenge box
       const key = await CryptoService.deriveKey(challengeInput, DEMO_SALT);
-
-      // Decrypt just this one item
       const plaintextJson = await CryptoService.decryptData(
         key,
         entry.ciphertext,
         entry.iv,
       );
-      const plaintext = JSON.parse(plaintextJson);
-
-      // Save it to revealed state and close the challenge box
-      setRevealedItems((prev) => ({ ...prev, [entry.id]: plaintext }));
+      setRevealedItems((prev) => ({
+        ...prev,
+        [entry.id]: JSON.parse(plaintextJson),
+      }));
       setChallengingId(null);
       setChallengeInput("");
-      resetTimer();
-      // eslint-disable-next-line no-unused-vars
+    // eslint-disable-next-line no-unused-vars
     } catch (error) {
-      alert("Incorrect Master Password!");
+      alert("Wrong PIN!");
       setChallengeInput("");
     }
   };
 
-  // 4. Save new password OR Update existing
   const handleSaveEntry = async (e) => {
     e.preventDefault();
-    if (!masterKey) return alert("Vault is locked!");
-
     const sensitiveData = JSON.stringify({
       password: formData.password,
       description: formData.description,
     });
-
     const { ciphertext, iv } = await CryptoService.encryptData(
       masterKey,
       sensitiveData,
     );
-
     const payload = {
       platform_title: formData.platform_title,
-      url: formData.url,
+      url: formData.platform_type === "Website" ? formData.url : null,
       account_label: formData.account_label,
       ciphertext,
       iv,
+      platform_type: formData.platform_type,
     };
 
     if (editingId) {
-      // UPDATE EXISTING ENTRY
-      const { error } = await supabase
-        .from("vault_entries")
-        .update(payload)
-        .eq("id", editingId);
-
-      if (error) return alert("Failed to update entry.");
-
-      // Update Local State
+      await supabase.from("vault_entries").update(payload).eq("id", editingId);
       setVaultData(
         vaultData.map((item) =>
           item.id === editingId ? { ...item, ...payload } : item,
         ),
       );
-
-      // Update Revealed Items if it was currently revealed
-      if (revealedItems[editingId]) {
-        setRevealedItems((prev) => ({
-          ...prev,
-          [editingId]: {
-            password: formData.password,
-            description: formData.description,
-          },
-        }));
-      }
-
-      setEditingId(null);
     } else {
-      // INSERT NEW ENTRY
-      const { data, error } = await supabase
+      const { data } = await supabase
         .from("vault_entries")
         .insert([payload])
         .select();
-
-      if (error) return alert("Failed to save entry.");
-
-      if (data && data.length > 0) {
-        setVaultData([data[0], ...vaultData]);
-        // Auto-reveal the one they just created
-        setRevealedItems((prev) => ({
-          ...prev,
-          [data[0].id]: {
-            password: formData.password,
-            description: formData.description,
-          },
-        }));
-      }
+      if (data) setVaultData([data[0], ...vaultData]);
     }
-
+    setIsModalOpen(false);
+    setEditingId(null);
     setFormData({
       platform_title: "",
       url: "",
       account_label: "",
       password: "",
       description: "",
+      platform_type: "Website",
     });
   };
 
-  // 5. Setup Edit Form
-  const handleEdit = (entry) => {
-    // Make sure the password is decrypted and visible first!
-    if (!revealedItems[entry.id]) {
-      return alert(
-        "Please click 'Reveal' and enter your Master Password before editing this entry.",
-      );
-    }
-
-    setEditingId(entry.id);
-    setFormData({
-      platform_title: entry.platform_title,
-      url: entry.url || "",
-      account_label: entry.account_label,
-      password: revealedItems[entry.id].password,
-      description: revealedItems[entry.id].description || "",
-    });
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  };
-
-  // 6. Delete Entry
-  const handleDelete = async (id) => {
-    if (window.confirm("Are you sure you want to delete this entry?")) {
-      const { error } = await supabase
-        .from("vault_entries")
-        .delete()
-        .eq("id", id);
-
-      if (error) return alert("Failed to delete entry.");
-
-      // Update UI
-      setVaultData(vaultData.filter((item) => item.id !== id));
-      const newRevealed = { ...revealedItems };
-      delete newRevealed[id];
-      setRevealedItems(newRevealed);
-    }
-  };
-
-  const copyToClipboard = (text) => {
-    navigator.clipboard.writeText(text);
-    alert("Copied!");
-  };
-
-  // --- RENDER ---
-  if (isNewVault === null)
-    return (
-      <div className="text-white text-center mt-20">
-        Loading Secure Vault...
-      </div>
-    );
+  const filteredData = vaultData.filter(
+    (item) => activeFilter === "All" || item.platform_type === activeFilter,
+  );
 
   return (
-    <div className="min-h-screen bg-[#0b1120] text-slate-300 p-8 font-sans">
-      <div className="max-w-4xl mx-auto">
-        <div className="flex justify-between items-center mb-8 pb-4 border-b border-slate-700">
-          <h1 className="text-3xl text-white font-bold">🔐 Secure Vault</h1>
-          {isUnlocked && (
-            <button
-              onClick={lockVault}
-              className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded font-medium transition"
-            >
-              Lock Vault
-            </button>
-          )}
-        </div>
-
-        {!isUnlocked ? (
-          <div className="bg-[#0f172a] p-8 rounded-xl border border-slate-700 shadow-xl max-w-md mx-auto">
-            <h2 className="text-xl text-white mb-4 text-center">
-              {isNewVault ? "Create Your Master Password" : "Unlock Your Vault"}
+    <div className="min-h-screen bg-[#060912] text-slate-200 font-sans tracking-tight antialiased">
+      {!isUnlocked ? (
+        /* FIXED MASTER PIN LAYOUT */
+        <div className="flex flex-col items-center justify-center min-h-screen p-6 animate-in fade-in duration-700">
+          <div
+            className="bg-[#0f172a] border border-slate-800 p-12 rounded-[2.5rem] shadow-2xl text-center w-full max-w-sm cursor-text"
+            onClick={() => pinRef.current?.focus()}
+          >
+            <h2 className="text-xl text-white font-bold tracking-[0.2em] uppercase mb-2">
+              {isNewVault ? "Set PIN" : "Unlock Vault"}
             </h2>
-            <p className="text-slate-400 text-sm mb-6 text-center">
-              {isNewVault
-                ? "Your database is empty. Create a strong Master Password to initialize your vault."
-                : "Enter your Master Password to access your saved credentials."}
-            </p>
-            <form
-              onSubmit={isNewVault ? handleCreateVault : handleUnlock}
-              className="space-y-4"
-            >
+            <div className="relative flex justify-center gap-6 my-12">
+              {[...Array(4)].map((_, i) => (
+                <div
+                  key={i}
+                  className={`w-4 h-4 rounded-full border-2 transition-all duration-300 ${
+                    isPinSuccess
+                      ? "bg-[#00f5d4] border-[#00f5d4] shadow-[0_0_20px_#00f5d4]"
+                      : pinInput.length > i
+                        ? "bg-white border-white scale-110 shadow-[0_0_15px_rgba(255,255,255,0.4)]"
+                        : "border-slate-700"
+                  }`}
+                />
+              ))}
               <input
-                type="password"
-                value={masterPasswordInput}
-                onChange={(e) => setMasterPasswordInput(e.target.value)}
-                placeholder="Master Password"
-                className="w-full bg-[#1e293b] border border-slate-600 text-white p-3 rounded focus:outline-none focus:border-cyan-500"
+                ref={pinRef}
+                type="text"
+                inputMode="numeric"
+                maxLength={4}
+                autoFocus
+                value={pinInput}
+                onChange={handlePinChange}
+                className="absolute inset-0 opacity-0"
               />
-              <button
-                type="submit"
-                className="w-full py-3 bg-cyan-600 hover:bg-cyan-500 text-white rounded font-bold transition"
-              >
-                {isNewVault ? "Initialize Vault" : "Unlock"}
-              </button>
-            </form>
+            </div>
+            <p className="text-[10px] text-slate-600 font-bold uppercase tracking-widest">
+              Secure PIN Protocol
+            </p>
           </div>
-        ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            {/* ADD / EDIT ENTRY FORM */}
-            <div className="lg:col-span-1 bg-[#0f172a] p-6 rounded-xl border border-slate-700 h-fit">
-              <h3 className="text-lg text-white font-semibold mb-4">
-                {editingId ? "Edit Entry" : "Add New Entry"}
-              </h3>
-              <form onSubmit={handleSaveEntry} className="space-y-4">
-                <input
-                  type="text"
-                  placeholder="Platform Title (e.g. Netflix)"
-                  required
-                  value={formData.platform_title}
-                  onChange={(e) =>
-                    setFormData({ ...formData, platform_title: e.target.value })
-                  }
-                  className="w-full bg-[#1e293b] border border-slate-600 p-2 rounded text-white outline-none focus:border-cyan-500"
-                />
-                <input
-                  type="url"
-                  placeholder="URL (e.g. https://netflix.com)"
-                  value={formData.url}
-                  onChange={(e) =>
-                    setFormData({ ...formData, url: e.target.value })
-                  }
-                  className="w-full bg-[#1e293b] border border-slate-600 p-2 rounded text-white outline-none focus:border-cyan-500"
-                />
-                <input
-                  type="text"
-                  placeholder="Account Label (e.g. user@email.com)"
-                  required
-                  value={formData.account_label}
-                  onChange={(e) =>
-                    setFormData({ ...formData, account_label: e.target.value })
-                  }
-                  className="w-full bg-[#1e293b] border border-slate-600 p-2 rounded text-white outline-none focus:border-cyan-500"
-                />
-                <input
-                  type="password"
-                  placeholder="Password"
-                  required
-                  value={formData.password}
-                  onChange={(e) =>
-                    setFormData({ ...formData, password: e.target.value })
-                  }
-                  className="w-full bg-[#1e293b] border border-slate-600 p-2 rounded text-white outline-none focus:border-cyan-500"
-                />
-                <textarea
-                  placeholder="Notes/Description"
-                  value={formData.description}
-                  onChange={(e) =>
-                    setFormData({ ...formData, description: e.target.value })
-                  }
-                  className="w-full bg-[#1e293b] border border-slate-600 p-2 rounded text-white outline-none focus:border-cyan-500 h-24"
-                ></textarea>
+        </div>
+      ) : (
+        /* VAULT UI */
+        <div className="w-full max-w-7xl mx-auto p-6 md:p-12">
+          {/* HEADER */}
+          <div className="flex items-center justify-between mb-16 h-14">
+            <button
+              onClick={() => {
+                setEditingId(null);
+                setIsModalOpen(true);
+              }}
+              className="px-8 h-full bg-[#00f5d4] hover:bg-[#00d1b5] text-[#060912] rounded-2xl font-bold transition-all shadow-[0_0_20px_rgba(0,245,212,0.2)] active:scale-95"
+            >
+              NEW ENTRY +
+            </button>
 
-                <div className="flex space-x-2">
-                  <button
-                    type="submit"
-                    className="flex-1 py-2 bg-cyan-600 hover:bg-cyan-500 text-white rounded font-medium"
-                  >
-                    {editingId ? "Update Entry" : "Save Entry"}
-                  </button>
-                  {editingId && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setEditingId(null);
-                        setFormData({
-                          platform_title: "",
-                          url: "",
-                          account_label: "",
-                          password: "",
-                          description: "",
-                        });
-                      }}
-                      className="px-4 bg-slate-600 hover:bg-slate-500 text-white rounded"
-                    >
-                      Cancel
-                    </button>
-                  )}
-                </div>
-              </form>
+            <div className="flex bg-[#0f172a] p-1.5 rounded-2xl border border-slate-800/50">
+              {["All", "Website", "App", "Desktop"].map((f) => (
+                <button
+                  key={f}
+                  onClick={() => setActiveFilter(f)}
+                  className={`px-6 py-2 rounded-xl text-[11px] font-bold uppercase tracking-widest transition-all ${activeFilter === f ? "bg-slate-700 text-white shadow-md" : "text-slate-500 hover:text-slate-300"}`}
+                >
+                  {f}
+                </button>
+              ))}
             </div>
 
-            {/* VAULT DISPLAY */}
-            <div className="lg:col-span-2 space-y-4">
-              {vaultData.length === 0 ? (
-                <p className="text-slate-500 italic p-6 text-center border border-dashed border-slate-700 rounded-xl">
-                  Your vault is empty.
-                </p>
-              ) : (
-                vaultData.map((entry) => {
-                  const isRevealed = !!revealedItems[entry.id];
-                  const isChallenging = challengingId === entry.id;
+            <button
+              onClick={lockVault}
+              className="px-8 h-full bg-slate-800/40 border border-slate-700/50 text-slate-400 hover:text-white rounded-2xl font-bold transition uppercase text-xs tracking-widest"
+            >
+              LOCK VAULT
+            </button>
+          </div>
 
-                  return (
-                    <div
-                      key={entry.id}
-                      className="bg-[#0f172a] p-5 rounded-xl border border-slate-700 flex flex-col items-start gap-4"
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            {filteredData.map((entry) => {
+              const isRevealed = !!revealedItems[entry.id];
+              const isChallenging = challengingId === entry.id;
+              return (
+                <div
+                  key={entry.id}
+                  className="bg-[#0f172a] border border-slate-800/60 p-8 rounded-4xl hover:border-slate-600 transition-all flex flex-col min-h-70"
+                >
+                  <div className="flex-1">
+                    <div className="flex justify-between items-start mb-6">
+                      <div className="w-12 h-12 bg-[#060912] rounded-xl flex items-center justify-center text-xl border border-slate-800">
+                        {entry.platform_type === "Website"
+                          ? "🌐"
+                          : entry.platform_type === "App"
+                            ? "📱"
+                            : "💻"}
+                      </div>
+                      <button
+                        onClick={() => {
+                          if (window.confirm("Delete?"))
+                            supabase
+                              .from("vault_entries")
+                              .delete()
+                              .eq("id", entry.id)
+                              .then(() =>
+                                setVaultData((v) =>
+                                  v.filter((i) => i.id !== entry.id),
+                                ),
+                              );
+                        }}
+                        className="p-2 text-slate-600 hover:text-red-400 transition-colors"
+                      >
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          width="18"
+                          height="18"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        >
+                          <path d="M3 6h18" />
+                          <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+                          <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+                          <line x1="10" x2="10" y1="11" y2="17" />
+                          <line x1="14" x2="14" y1="11" y2="17" />
+                        </svg>
+                      </button>
+                    </div>
+                    <span className="text-[10px] font-bold text-[#00f5d4] uppercase tracking-widest mb-2 block">
+                      {entry.platform_type}
+                    </span>
+                    <h3 className="text-xl font-bold text-white mb-1">
+                      {entry.platform_title}
+                    </h3>
+                    <p className="text-slate-500 text-sm mb-8">
+                      {entry.account_label}
+                    </p>
+                  </div>
+
+                  {!isRevealed && !isChallenging && (
+                    <button
+                      onClick={() => setChallengingId(entry.id)}
+                      className="w-full py-4 bg-slate-800/50 hover:bg-slate-700 text-slate-300 rounded-2xl font-bold uppercase text-[10px] tracking-widest transition-all"
                     >
-                      <div className="w-full flex justify-between items-start">
-                        <div>
-                          <h4 className="text-lg font-bold text-white flex items-center space-x-2">
-                            <span>{entry.platform_title}</span>
-                            <span className="text-xs px-2 py-1 bg-slate-800 rounded text-cyan-400 font-normal">
-                              {entry.account_label}
-                            </span>
-                          </h4>
-                          {entry.url && (
-                            <a
-                              href={entry.url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-sm text-blue-400 hover:underline"
-                            >
-                              {entry.url}
-                            </a>
-                          )}
-                        </div>
+                      Reveal Password
+                    </button>
+                  )}
 
-                        {isRevealed && (
-                          <button
-                            onClick={() => {
-                              const newRevealed = { ...revealedItems };
-                              delete newRevealed[entry.id];
-                              setRevealedItems(newRevealed);
-                            }}
-                            className="text-sm text-slate-500 hover:text-white transition"
-                          >
-                            Hide
-                          </button>
-                        )}
-                      </div>
-
-                      {/* Password Challenge/Reveal Section */}
-                      <div className="w-full bg-[#1e293b] p-3 rounded border border-slate-700">
-                        {isRevealed ? (
-                          <div className="flex justify-between items-center">
-                            <span className="font-mono text-emerald-400 text-lg tracking-wide select-all">
-                              {revealedItems[entry.id].password}
-                            </span>
-                            <button
-                              onClick={() =>
-                                copyToClipboard(
-                                  revealedItems[entry.id].password,
-                                )
-                              }
-                              className="p-2 bg-slate-700 hover:bg-slate-600 rounded text-white transition"
-                            >
-                              📋 Copy
-                            </button>
-                          </div>
-                        ) : isChallenging ? (
-                          <form
-                            onSubmit={(e) => handleReveal(e, entry)}
-                            className="flex space-x-2"
-                          >
-                            <input
-                              type="password"
-                              autoFocus
-                              placeholder="Confirm Master Password..."
-                              value={challengeInput}
-                              onChange={(e) =>
-                                setChallengeInput(e.target.value)
-                              }
-                              className="flex-1 bg-[#0b1120] border border-cyan-500/50 text-white px-3 py-2 rounded outline-none focus:border-cyan-500"
-                            />
-                            <button
-                              type="submit"
-                              className="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 text-white rounded transition"
-                            >
-                              Reveal
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setChallengingId(null)}
-                              className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded transition"
-                            >
-                              Cancel
-                            </button>
-                          </form>
-                        ) : (
-                          <div className="flex justify-between items-center">
-                            <span className="font-mono text-slate-500 tracking-widest text-lg">
-                              ••••••••••••
-                            </span>
-                            <button
-                              onClick={() => setChallengingId(entry.id)}
-                              className="px-4 py-1.5 border border-slate-600 hover:border-cyan-500 hover:text-cyan-400 text-slate-400 rounded transition flex items-center space-x-2"
-                            >
-                              <span>🔒</span>
-                              <span>Reveal</span>
-                            </button>
-                          </div>
-                        )}
-                      </div>
-
-                      {isRevealed && revealedItems[entry.id].description && (
-                        <p className="text-sm text-slate-400 w-full mt-2 bg-[#1e293b] p-3 rounded border-l-2 border-slate-600">
-                          {revealedItems[entry.id].description}
-                        </p>
-                      )}
-
-                      {/* EDIT AND DELETE BUTTONS */}
-                      <div className="flex space-x-2 mt-2">
+                  {isChallenging && (
+                    <form
+                      onSubmit={(e) => handleRevealChallenge(e, entry)}
+                      className="flex flex-col gap-2"
+                    >
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        maxLength={4}
+                        placeholder="PIN"
+                        autoFocus
+                        value={challengeInput}
+                        onChange={(e) =>
+                          /^\d{0,4}$/.test(e.target.value) &&
+                          setChallengeInput(e.target.value)
+                        }
+                        className="w-full bg-[#060912] border border-[#00f5d4]/30 text-white text-center p-3 rounded-xl outline-none focus:border-[#00f5d4]"
+                      />
+                      <div className="flex gap-2">
                         <button
-                          onClick={() => handleEdit(entry)}
-                          className="text-xs px-3 py-1 bg-slate-700 hover:bg-slate-600 rounded text-slate-300 transition"
+                          type="submit"
+                          className="flex-1 py-2 bg-[#00f5d4] text-[#060912] rounded-xl text-[10px] font-bold uppercase"
+                        >
+                          Confirm
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setChallengingId(null)}
+                          className="px-4 py-2 bg-slate-800 text-slate-400 rounded-xl"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    </form>
+                  )}
+
+                  {isRevealed && (
+                    <div className="animate-in slide-in-from-top-2 duration-200">
+                      <div className="bg-[#060912] p-4 rounded-xl border border-slate-800 flex justify-between items-center mb-4">
+                        <code className="text-[#00f5d4] font-mono text-lg font-bold tracking-widest select-all">
+                          {revealedItems[entry.id].password}
+                        </code>
+                        <button
+                          onClick={() => {
+                            navigator.clipboard.writeText(
+                              revealedItems[entry.id].password,
+                            );
+                            setCopyingId(entry.id);
+                            setTimeout(() => setCopyingId(null), 2000);
+                          }}
+                          className="text-[10px] font-bold text-slate-400 hover:text-white uppercase"
+                        >
+                          {copyingId === entry.id ? "Done" : "Copy"}
+                        </button>
+                      </div>
+                      <div className="flex gap-4">
+                        <button
+                          onClick={() => {
+                            /* Edit trigger */
+                          }}
+                          className="text-[10px] font-bold text-slate-500 hover:text-[#00f5d4] uppercase tracking-widest transition-colors"
                         >
                           Edit
                         </button>
                         <button
-                          onClick={() => handleDelete(entry.id)}
-                          className="text-xs px-3 py-1 bg-red-900/40 hover:bg-red-600 border border-red-800/50 rounded text-slate-300 hover:text-white transition"
+                          onClick={() => {
+                            const n = { ...revealedItems };
+                            delete n[entry.id];
+                            setRevealedItems(n);
+                          }}
+                          className="text-[10px] font-bold text-slate-500 hover:text-white uppercase tracking-widest"
                         >
-                          Delete
+                          Hide
                         </button>
                       </div>
                     </div>
-                  );
-                })
-              )}
-            </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
-        )}
-      </div>
+        </div>
+      )}
+
+      {/* MODAL (FORM) */}
+      {isModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-[#060912]/95 backdrop-blur-sm">
+          <div
+            className="absolute inset-0"
+            onClick={() => setIsModalOpen(false)}
+          ></div>
+          <form
+            onSubmit={handleSaveEntry}
+            className="relative bg-[#0f172a] border-t-4 border-t-[#00f5d4] border-x border-b border-slate-800 p-10 rounded-[2.5rem] w-full max-w-xl space-y-8 shadow-2xl animate-in zoom-in-95"
+          >
+            <h3 className="text-2xl text-white font-black uppercase tracking-tight">
+              {editingId ? "Edit Account" : "New Account"}
+            </h3>
+
+            <div className="flex bg-[#060912] p-1.5 rounded-2xl border border-slate-800/50">
+              {["Website", "App", "Desktop"].map((t) => (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => setFormData({ ...formData, platform_type: t })}
+                  className={`flex-1 py-3 text-[10px] font-bold rounded-xl uppercase tracking-widest transition-all ${formData.platform_type === t ? "bg-slate-700 text-white shadow-inner" : "text-slate-500 hover:text-slate-400"}`}
+                >
+                  {t}
+                </button>
+              ))}
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <input
+                type="text"
+                placeholder="Platform Name"
+                required
+                value={formData.platform_title}
+                onChange={(e) =>
+                  setFormData({ ...formData, platform_title: e.target.value })
+                }
+                className="w-full bg-[#060912] border border-slate-800 p-4 rounded-2xl text-white focus:border-[#00f5d4] outline-none transition-all"
+              />
+              <input
+                type="text"
+                placeholder="Email/Login ID"
+                required
+                value={formData.account_label}
+                onChange={(e) =>
+                  setFormData({ ...formData, account_label: e.target.value })
+                }
+                className="w-full bg-[#060912] border border-slate-800 p-4 rounded-2xl text-white focus:border-[#00f5d4] outline-none transition-all"
+              />
+            </div>
+
+            {formData.platform_type === "Website" && (
+              <input
+                type="url"
+                placeholder="Website URL"
+                value={formData.url}
+                onChange={(e) =>
+                  setFormData({ ...formData, url: e.target.value })
+                }
+                className="w-full bg-[#060912] border border-slate-800 p-4 rounded-2xl text-white focus:border-[#00f5d4] outline-none transition-all animate-in slide-in-from-top-2"
+              />
+            )}
+
+            <div className="space-y-2">
+              <div className="flex justify-between items-center px-1">
+                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+                  Access Password
+                </label>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const newPass = PasswordEngine.generatePassword(22);
+                    setFormData({ ...formData, password: newPass });
+                  }}
+                  className="text-[9px] font-black text-[#00f5d4] hover:text-white uppercase transition-colors"
+                >
+                  ⚡ Generate Secure
+                </button>
+              </div>
+              <input
+                type="password"
+                placeholder="••••••••"
+                required
+                value={formData.password}
+                onChange={(e) =>
+                  setFormData({ ...formData, password: e.target.value })
+                }
+                className="w-full bg-[#060912] border border-slate-800 p-4 rounded-2xl text-white focus:border-[#00f5d4] outline-none transition-all"
+              />
+            </div>
+
+            <div className="flex gap-4 pt-4">
+              <button
+                type="button"
+                onClick={() => setIsModalOpen(false)}
+                className="flex-1 py-5 bg-slate-800/50 text-slate-500 rounded-2xl font-bold uppercase text-xs tracking-widest hover:text-white transition"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="flex-1 py-5 bg-[#00f5d4] text-[#060912] rounded-2xl font-bold uppercase text-xs tracking-widest shadow-[0_0_20px_rgba(0,245,212,0.2)]"
+              >
+                Encrypt & Save
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
     </div>
   );
 }
