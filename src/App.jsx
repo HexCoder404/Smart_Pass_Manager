@@ -43,7 +43,7 @@ export default function App() {
       <div className="min-h-screen bg-[#0b1120] flex flex-col p-6 font-sans">
         {/* Top Navigation Bar */}
         <div className="w-full max-w-4xl mx-auto flex justify-between items-center mb-12 pb-4 border-b border-slate-800">
-          <h1 className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-indigo-500 tracking-wide">
+          <h1 className="text-2xl font-bold text-transparent bg-clip-text bg-linear-to-r from-cyan-400 to-indigo-500 tracking-wide">
             Smart Pass Manager
           </h1>
           <nav className="flex space-x-4 items-center">
@@ -55,7 +55,7 @@ export default function App() {
             </Link>
             <Link
               to="/vault"
-              className="px-5 py-2.5 bg-gradient-to-r from-cyan-600 to-blue-600 text-white rounded-lg font-bold shadow-lg hover:opacity-90 transition"
+              className="px-5 py-2.5 bg-linear-to-r from-cyan-600 to-blue-600 text-white rounded-lg font-bold shadow-lg hover:opacity-90 transition"
             >
               🔐 Secure Vault
             </Link>
