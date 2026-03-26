@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { CryptoService } from "../../utils/crypto";
 import { supabase } from "../../utils/supabase";
-import { PasswordEngine } from "../../utils/passwordEngine"; // Import the engine
+import { PasswordEngine } from "../../utils/passwordEngine"; 
 
 const DEMO_SALT = new Uint8Array([
   15, 82, 193, 44, 55, 66, 77, 88, 99, 10, 11, 12, 13, 14, 15, 16,
@@ -187,7 +187,6 @@ export default function VaultDashboard() {
   return (
     <div className="min-h-screen bg-[#060912] text-slate-200 font-sans tracking-tight antialiased">
       {!isUnlocked ? (
-        /* FIXED MASTER PIN LAYOUT */
         <div className="flex flex-col items-center justify-center min-h-screen p-6 animate-in fade-in duration-700">
           <div
             className="bg-[#0f172a] border border-slate-800 p-12 rounded-[2.5rem] shadow-2xl text-center w-full max-w-sm cursor-text"
@@ -235,9 +234,9 @@ export default function VaultDashboard() {
                 setEditingId(null);
                 setIsModalOpen(true);
               }}
-              className="px-8 h-full bg-[#00f5d4] hover:bg-[#00d1b5] text-[#060912] rounded-2xl font-bold transition-all shadow-[0_0_20px_rgba(0,245,212,0.2)] active:scale-95"
+              className="px-8 h-full bg-[#2df500] hover:bg-[#a9e363] text-[#060912] rounded-2xl font-bold transition-all shadow-[0_0_20px_rgba(0,245,212,0.2)] active:scale-95"
             >
-              NEW ENTRY +
+              NEW
             </button>
 
             <div className="flex bg-[#0f172a] p-1.5 rounded-2xl border border-slate-800/50">
