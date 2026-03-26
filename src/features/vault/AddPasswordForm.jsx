@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { CryptoService } from "../../utils/crypto";
 import { supabase } from "../../utils/supabase";
 import { PasswordEngine } from "../../utils/passwordEngine";
+import { useToast } from "../../App";
 
 const DEMO_SALT = new Uint8Array([15, 82, 193, 44, 55, 66, 77, 88, 99, 10, 11, 12, 13, 14, 15, 16]);
 const SESSION_TIMEOUT_MS = 5 * 60 * 1000;
@@ -67,6 +68,7 @@ export default function VaultDashboard() {
   const [masterKey, setMasterKey]       = useState(null);
   const [pinInput, setPinInput]         = useState("");
   const [isPinSuccess, setIsPinSuccess] = useState(false);
+  const [isPinError, setIsPinError]     = useState(false);
   const [isNewVault, setIsNewVault]     = useState(null);
   const [vaultData, setVaultData]       = useState([]);
   const [activeFilter, setActiveFilter] = useState("All");
@@ -77,6 +79,9 @@ export default function VaultDashboard() {
   const [challengeInput, setChallengeInput] = useState("");
   const [editingId, setEditingId]         = useState(null);
   const [copyingId, setCopyingId]         = useState(null);
+  const [deletingId, setDeletingId]       = useState(null);
+
+  const { toast } = useToast();
 
   const [formData, setFormData] = useState({
     platform_title: "", url: "", account_label: "",
@@ -100,7 +105,11 @@ export default function VaultDashboard() {
 
   const handlePinChange = (e) => {
     const val = e.target.value;
-    if (/^\d{0,4}$/.test(val)) { setPinInput(val); if (val.length === 4) attemptUnlock(val); }
+    if (/^\d{0,4}$/.test(val)) {
+      setPinInput(val);
+      if (isPinError) setIsPinError(false);
+      if (val.length === 4) attemptUnlock(val);
+    }
   };
 
   const attemptUnlock = async (finalPin) => {
@@ -120,7 +129,11 @@ export default function VaultDashboard() {
         }
       }
     // eslint-disable-next-line no-unused-vars
-    } catch (error) { alert("Invalid Access PIN."); setPinInput(""); }
+    } catch (error) {
+      setIsPinError(true);
+      toast("Invalid Access PIN.", "error");
+      setPinInput("");
+    }
   };
 
   const finishUnlock = (key, data) => {
@@ -137,7 +150,10 @@ export default function VaultDashboard() {
       setRevealedItems(prev => ({ ...prev, [entry.id]: JSON.parse(plaintextJson) }));
       setChallengingId(null); setChallengeInput("");
     // eslint-disable-next-line no-unused-vars
-    } catch (error) { alert("Wrong PIN!"); setChallengeInput(""); }
+    } catch (error) {
+      toast("Wrong PIN!", "error");
+      setChallengeInput("");
+    }
   };
 
   const handleSaveEntry = async (e) => {
@@ -154,9 +170,11 @@ export default function VaultDashboard() {
     if (editingId) {
       await supabase.from("vault_entries").update(payload).eq("id", editingId);
       setVaultData(vaultData.map(item => item.id === editingId ? { ...item, ...payload } : item));
+      toast("Account updated successfully!");
     } else {
       const { data } = await supabase.from("vault_entries").insert([payload]).select();
       if (data) setVaultData([data[0], ...vaultData]);
+      toast("Account saved successfully!");
     }
     setIsModalOpen(false); setEditingId(null);
     setFormData({ platform_title: "", url: "", account_label: "", password: "", description: "", platform_type: "Website" });
@@ -226,18 +244,24 @@ export default function VaultDashboard() {
           </p>
 
           {/* PIN dots */}
-          <div style={{ position: "relative", display: "flex", justifyContent: "center", gap: "1.25rem", marginBottom: "2.5rem" }}>
-            {[...Array(4)].map((_, i) => (
-              <div key={i} style={{
-                width: "14px", height: "14px", borderRadius: "50%",
-                border: `2px solid ${isPinSuccess ? "hsl(var(--success))" : pinInput.length > i ? "hsl(var(--primary))" : "hsl(var(--border))"}`,
-                backgroundColor: isPinSuccess ? "hsl(var(--success))" : pinInput.length > i ? "hsl(var(--primary))" : "transparent",
-                transform: pinInput.length > i ? "scale(1.15)" : "scale(1)",
-                transition: "all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275)",
-                boxShadow: isPinSuccess ? "0 0 12px hsla(var(--success) / 0.5)" : "none",
-              }} />
-            ))}
-            <input ref={pinRef} type="text" inputMode="numeric" maxLength={4} autoFocus
+          <div className={isPinError ? "animate-shake" : ""} style={{ position: "relative", display: "flex", justifyContent: "center", gap: "1.25rem", marginBottom: "2.5rem" }}>
+            {[...Array(4)].map((_, i) => {
+              const isActive = pinInput.length > i;
+              const borderColor = isPinSuccess ? "hsl(var(--success))" : isPinError ? "hsl(var(--destructive))" : isActive ? "hsl(var(--primary))" : "hsl(var(--border))";
+              const bgColor = isPinSuccess ? "hsl(var(--success))" : isPinError ? "hsl(var(--destructive))" : isActive ? "hsl(var(--primary))" : "transparent";
+              
+              return (
+                <div key={i} style={{
+                  width: "14px", height: "14px", borderRadius: "50%",
+                  border: `2px solid ${borderColor}`,
+                  backgroundColor: bgColor,
+                  transform: isActive || isPinError ? "scale(1.15)" : "scale(1)",
+                  transition: "all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275)",
+                  boxShadow: isPinSuccess ? "0 0 12px hsla(var(--success) / 0.5)" : isPinError ? "0 0 12px hsla(var(--destructive) / 0.5)" : "none",
+                }} />
+              );
+            })}
+            <input ref={pinRef} type="password" inputMode="numeric" maxLength={4} autoFocus
               value={pinInput} onChange={handlePinChange}
               style={{ position: "absolute", inset: 0, opacity: 0, cursor: "text" }}
             />
@@ -315,11 +339,7 @@ export default function VaultDashboard() {
                 }}>
                   {platformIcon(entry.platform_type)}
                 </div>
-                <button onClick={() => {
-                  if (window.confirm("Delete this entry?"))
-                    supabase.from("vault_entries").delete().eq("id", entry.id)
-                      .then(() => setVaultData(v => v.filter(i => i.id !== entry.id)));
-                }} className="btn-ghost" style={{ padding: "0.3rem", lineHeight: 0, color: "hsl(var(--muted-foreground))" }}
+                <button onClick={() => setDeletingId(entry.id)} className="btn-ghost" style={{ padding: "0.3rem", lineHeight: 0, color: "hsl(var(--muted-foreground))" }}
                   onMouseEnter={e => e.currentTarget.style.color = "hsl(var(--destructive))"}
                   onMouseLeave={e => e.currentTarget.style.color = "hsl(var(--muted-foreground))"}
                 >
@@ -350,10 +370,10 @@ export default function VaultDashboard() {
 
               {isChallenging && (
                 <form onSubmit={e => handleRevealChallenge(e, entry)} style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
-                  <input type="text" inputMode="numeric" maxLength={4} placeholder="Enter PIN"
-                    autoFocus value={challengeInput}
-                    onChange={e => /^\d{0,4}$/.test(e.target.value) && setChallengeInput(e.target.value)}
-                    style={{ ...inp, textAlign: "center", letterSpacing: "0.3em" }}
+                  <input type="password" inputMode="numeric" maxLength={4} placeholder="Enter PIN"
+                     autoFocus value={challengeInput}
+                     onChange={e => /^\d{0,4}$/.test(e.target.value) && setChallengeInput(e.target.value)}
+                     style={{ ...inp, textAlign: "center", letterSpacing: "0.3em" }}
                   />
                   <div style={{ display: "flex", gap: "0.5rem" }}>
                     <button type="submit" className="btn-primary" style={{ flex: 1, padding: "0.5rem", fontSize: "0.82rem" }}>
@@ -370,6 +390,20 @@ export default function VaultDashboard() {
 
               {isRevealed && (
                 <div>
+                  {revealedItems[entry.id].description && (
+                    <div style={{
+                      backgroundColor: "hsla(var(--primary)/0.08)",
+                      color: "hsl(var(--foreground))",
+                      padding: "0.6rem 0.8rem",
+                      borderRadius: "var(--radius)",
+                      fontSize: "0.8rem",
+                      lineHeight: "1.4",
+                      marginBottom: "0.6rem",
+                      borderLeft: "2px solid hsl(var(--primary))"
+                    }}>
+                      {revealedItems[entry.id].description}
+                    </div>
+                  )}
                   <div style={{
                     backgroundColor: "hsl(var(--muted))",
                     border: "1px solid hsl(var(--border))",
@@ -384,6 +418,7 @@ export default function VaultDashboard() {
                     <button onClick={() => {
                       navigator.clipboard.writeText(revealedItems[entry.id].password);
                       setCopyingId(entry.id);
+                      toast("Password copied to clipboard!");
                       setTimeout(() => setCopyingId(null), 2000);
                     }} className="btn-ghost" style={{ padding: "0.2rem 0.5rem", fontSize: "0.72rem", fontWeight: "700", letterSpacing: "0.05em" }}>
                       {copyingId === entry.id ? "✓ Done" : "Copy"}
@@ -495,6 +530,47 @@ export default function VaultDashboard() {
               </button>
             </div>
           </form>
+        </div>
+      )}
+      {/* ── Delete Confirmation Modal ── */}
+      {deletingId && (
+        <div style={{
+          position: "fixed", inset: 0, zIndex: 60,
+          display: "flex", alignItems: "center", justifyContent: "center", padding: "1.5rem",
+          backgroundColor: "hsla(var(--background) / 0.85)",
+          backdropFilter: "blur(8px)",
+        }}>
+          <div style={{ position: "absolute", inset: 0 }} onClick={() => setDeletingId(null)} />
+          <div className="card" style={{
+            position: "relative",
+            padding: "2rem",
+            width: "100%", maxWidth: "400px",
+            borderTop: "3px solid hsl(var(--destructive))",
+            boxShadow: "0 25px 60px rgba(0,0,0,0.3)",
+            textAlign: "center"
+          }}>
+            <h3 className="text-foreground" style={{ fontSize: "1.25rem", fontWeight: "800", marginBottom: "1rem" }}>
+              Delete Entry?
+            </h3>
+            <p className="text-muted-foreground" style={{ fontSize: "0.9rem", marginBottom: "2rem" }}>
+              Are you sure you want to permanently delete this password entry? This action cannot be undone.
+            </p>
+            <div style={{ display: "flex", gap: "0.75rem" }}>
+              <button onClick={() => setDeletingId(null)} className="btn-secondary" style={{ flex: 1, padding: "0.75rem" }}>
+                Cancel
+              </button>
+              <button onClick={() => {
+                supabase.from("vault_entries").delete().eq("id", deletingId)
+                  .then(() => {
+                    setVaultData(v => v.filter(i => i.id !== deletingId));
+                    toast("Entry deleted forever.", "default");
+                    setDeletingId(null);
+                  });
+              }} className="btn-primary" style={{ flex: 1, padding: "0.75rem", backgroundColor: "hsl(var(--destructive))", color: "hsl(var(--destructive-foreground))" }}>
+                Delete
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

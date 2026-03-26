@@ -54,6 +54,16 @@
   --ring:          160 84% 39%;
 }
 
+/* ── Animations ──────────────────────────────────────────────────────────── */
+@keyframes fadeInSlideUp {
+  from { opacity: 0; transform: translateY(20px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.page-transition {
+  animation: fadeInSlideUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
 /* ── Base reset ──────────────────────────────────────────────────────────── */
 *, *::before, *::after { box-sizing: border-box; }
 
@@ -135,6 +145,22 @@ body {
 .btn-primary:hover   { opacity: 0.9; }
 .btn-primary:active  { transform: scale(0.97); }
 
+@keyframes slideInRight {
+  from { opacity: 0; transform: translateX(110%); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes fadeOutRight {
+  from { opacity: 1; transform: translateX(0); }
+  to { opacity: 0; transform: translateX(110%); }
+}
+
+.toast-enter {
+  animation: slideInRight 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+.toast-exit {
+  animation: fadeOutRight 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
 .btn-secondary {
   background-color: hsl(var(--secondary));
   color: hsl(var(--secondary-foreground));

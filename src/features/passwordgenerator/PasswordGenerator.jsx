@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { PasswordEngine } from "../../utils/passwordEngine";
+import { useToast } from "../../App";
 
 export default function PasswordGenerator() {
   const [password, setPassword] = useState("");
@@ -10,6 +11,8 @@ export default function PasswordGenerator() {
   const [symbols, setSymbols]   = useState(true);
   const [strength, setStrength] = useState({ score: 0, label: "" });
   const [copied, setCopied]     = useState(false);
+
+  const { toast } = useToast();
 
   const generate = () => {
     if (!upper && !lower && !numbers && !symbols) return;
@@ -23,6 +26,7 @@ export default function PasswordGenerator() {
     if (!password) return;
     navigator.clipboard.writeText(password);
     setCopied(true);
+    toast("Password copied to clipboard!");
     setTimeout(() => setCopied(false), 2000);
   };
 

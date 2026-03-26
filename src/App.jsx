@@ -4,6 +4,46 @@ import PasswordGenerator from './features/passwordgenerator/PasswordGenerator';
 import PasswordChecker from './features/passwordchecker/PasswordChecker';
 import VaultDashboard from './features/vault/AddPasswordForm';
 
+/* ── Toast Context ──────────────────────────────────────────────────────── */
+export const ToastContext = createContext(null);
+export function useToast() { return useContext(ToastContext); }
+
+function ToastProvider({ children }) {
+  const [toasts, setToasts] = useState([]);
+
+  const toast = (message, type = "default") => {
+    const id = Date.now();
+    setToasts(prev => [...prev, { id, message, type }]);
+    setTimeout(() => {
+      setToasts(prev => prev.filter(t => t.id !== id));
+    }, 3000);
+  };
+
+  return (
+    <ToastContext.Provider value={{ toast }}>
+      {children}
+      <div style={{
+        position: "fixed", bottom: "1.5rem", right: "1.5rem",
+        display: "flex", flexDirection: "column", gap: "0.75rem", zIndex: 9999
+      }}>
+        {toasts.map(t => (
+          <div key={t.id} className="toast-enter" style={{
+            backgroundColor: t.type === "error" ? "hsl(var(--destructive))" : "hsl(var(--card))",
+            color: t.type === "error" ? "hsl(var(--destructive-foreground))" : "hsl(var(--foreground))",
+            padding: "0.6rem 1.1rem", borderRadius: "100px",
+            boxShadow: "0 10px 30px rgba(0,0,0,0.15)",
+            border: t.type === "error" ? "none" : "1px solid hsl(var(--border))",
+            fontWeight: "500", fontSize: "0.85rem",
+            display: "flex", alignItems: "center", gap: "0.5rem"
+          }}>
+            {t.message}
+          </div>
+        ))}
+      </div>
+    </ToastContext.Provider>
+  );
+}
+
 /* ── Theme Context ──────────────────────────────────────────────────────── */
 export const ThemeContext = createContext(null);
 export function useTheme() { return useContext(ThemeContext); }
@@ -198,24 +238,35 @@ function MainTools() {
 }
 
 /* ── App Root ────────────────────────────────────────────────────────────── */
+function AppContent() {
+  const location = useLocation();
+  return (
+    <div className="bg-background" style={{ minHeight: "100vh" }}>
+      <Navbar />
+      <main style={{
+        maxWidth: "1100px",
+        margin: "0 auto",
+        padding: "2.5rem 1.5rem",
+      }}>
+        <div key={location.pathname} className="page-transition">
+          <Routes>
+            <Route path="/" element={<VaultDashboard />} />
+            <Route path="/tools" element={<MainTools />} />
+          </Routes>
+        </div>
+      </main>
+    </div>
+  );
+}
+
 export default function App() {
   return (
     <ThemeProvider>
-      <Router>
-        <div className="bg-background" style={{ minHeight: "100vh" }}>
-          <Navbar />
-          <main style={{
-            maxWidth: "1100px",
-            margin: "0 auto",
-            padding: "2.5rem 1.5rem",
-          }}>
-            <Routes>
-              <Route path="/" element={<VaultDashboard />} />
-              <Route path="/tools" element={<MainTools />} />
-            </Routes>
-          </main>
-        </div>
-      </Router>
+      <ToastProvider>
+        <Router>
+          <AppContent />
+        </Router>
+      </ToastProvider>
     </ThemeProvider>
   );
 }
