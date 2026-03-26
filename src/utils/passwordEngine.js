@@ -1,79 +1,111 @@
-export class PasswordEngine {
-    constructor() {
-        this.charSets = {
-            upper: "ABCDEFGHIJKLMNOPQRSTUVWXYZ",
-            lower: "abcdefghijklmnopqrstuvwxyz",
-            numbers: "0123456789",
-            symbols: "!@#$%^&*()_+-=[]{}|;:,.<>?"
-        };
+// src/utils/passwordEngine.js
+
+export const PasswordEngine = {
+  /**
+   * 1. Cryptographically Secure Password Generator
+   * Uses the Web Crypto API instead of Math.random() for true randomness.
+   */
+  generatePassword(
+    length = 16,
+    options = {
+      uppercase: true,
+      lowercase: true,
+      numbers: true,
+      symbols: true,
+    },
+  ) {
+    const charSets = {
+      lowercase: "abcdefghijklmnopqrstuvwxyz",
+      uppercase: "ABCDEFGHIJKLMNOPQRSTUVWXYZ",
+      numbers: "0123456789",
+      symbols: "!@#$%^&*()_+~`|}{[]:;?><,./-=",
+    };
+
+    let pool = "";
+    if (options.lowercase) pool += charSets.lowercase;
+    if (options.uppercase) pool += charSets.uppercase;
+    if (options.numbers) pool += charSets.numbers;
+    if (options.symbols) pool += charSets.symbols;
+
+    if (!pool || length <= 0) return "";
+
+    // Create a typed array to hold secure random values
+    const randomValues = window.crypto.getRandomValues(new Uint32Array(length));
+    let password = "";
+
+    for (let i = 0; i < length; i++) {
+      // Map the random values to the available character pool
+      password += pool[randomValues[i] % pool.length];
     }
 
-    generate(length = 24, useUpper = true, useLower = true, useNumbers = true, useSymbols = true) {
-        let pool = "";
-        let guaranteed = [];
-        
-        if (useUpper) {
-            pool += this.charSets.upper;
-            guaranteed.push(this.charSets.upper[Math.floor(Math.random() * this.charSets.upper.length)]);
-        }
-        if (useLower) {
-            pool += this.charSets.lower;
-            guaranteed.push(this.charSets.lower[Math.floor(Math.random() * this.charSets.lower.length)]);
-        }
-        if (useNumbers) {
-            pool += this.charSets.numbers;
-            guaranteed.push(this.charSets.numbers[Math.floor(Math.random() * this.charSets.numbers.length)]);
-        }
-        if (useSymbols) {
-            pool += this.charSets.symbols;
-            guaranteed.push(this.charSets.symbols[Math.floor(Math.random() * this.charSets.symbols.length)]);
-        }
-            
-        if (!pool) throw new Error("At least one character set must be selected.");
+    return password;
+  },
 
-        let remainingLength = length - guaranteed.length;
-        let passwordArray = [...guaranteed];
-        
-        for (let i = 0; i < remainingLength; i++) {
-            passwordArray.push(pool[Math.floor(Math.random() * pool.length)]);
-        }
-        
-        // Shuffle the array
-        for (let i = passwordArray.length - 1; i > 0; i--) {
-            const j = Math.floor(Math.random() * (i + 1));
-            [passwordArray[i], passwordArray[j]] = [passwordArray[j], passwordArray[i]];
-        }
-        
-        return passwordArray.join("");
+  /**
+   * 2. Local Password Strength & Entropy Checker
+   * Calculates the mathematical "guessability" of the password locally.
+   */
+  checkStrength(password) {
+    if (!password)
+      return { score: 0, label: "Empty", entropy: 0, suggestions: [] };
+
+    let score = 0;
+    let poolSize = 0;
+
+    // Determine the pool size of characters used
+    if (/[a-z]/.test(password)) {
+      poolSize += 26;
+      score += 1;
+    }
+    if (/[A-Z]/.test(password)) {
+      poolSize += 26;
+      score += 1;
+    }
+    if (/[0-9]/.test(password)) {
+      poolSize += 10;
+      score += 1;
+    }
+    if (/[^A-Za-z0-9]/.test(password)) {
+      poolSize += 32;
+      score += 1;
     }
 
-    checkStrength(password) {
-        let analysis = {
-            length: password.length,
-            uppercase: (password.match(/[A-Z]/g) || []).length,
-            lowercase: (password.match(/[a-z]/g) || []).length,
-            numbers: (password.match(/[0-9]/g) || []).length,
-            symbols: (password.match(/[!@#$%^&*()_+\-=\[\]{}|;:,.<>?]/g) || []).length
-        };
+    // Calculate Shannon Entropy: E = L * log2(R)
+    // L = password length, R = pool size
+    const entropy =
+      poolSize > 0 ? Math.floor(password.length * Math.log2(poolSize)) : 0;
 
-        let poolSize = 0;
-        if (analysis.uppercase > 0) poolSize += 26;
-        if (analysis.lowercase > 0) poolSize += 26;
-        if (analysis.numbers > 0) poolSize += 10;
-        if (analysis.symbols > 0) poolSize += this.charSets.symbols.length;
+    // Boost score based on length and high entropy
+    if (password.length >= 8) score += 1;
+    if (password.length >= 12) score += 1;
+    if (entropy >= 60) score += 1; // 60+ bits of entropy is highly resistant to brute force
 
-        let entropy = 0;
-        if (poolSize > 0 && analysis.length > 0) {
-            entropy = analysis.length * Math.log2(poolSize);
-        }
+    // Cap the score at 5 for easy UI mapping (0 to 5 scale)
+    score = Math.min(score, 5);
 
-        let score = Math.min(100, Math.max(0, Math.floor((entropy / 100) * 100)));
-        
-        let label = "Weak";
-        if (score >= 25 && score < 50) label = "Fair";
-        else if (score >= 50 && score < 75) label = "Strong";
-        else if (score >= 75) label = "Very Strong";
+    let label = "Weak";
+    if (score >= 4) label = "Strong";
+    else if (score >= 2) label = "Fair";
 
-        return { score, label, entropyBits: entropy.toFixed(2), details: analysis };
-    }
-}
+    return {
+      score,
+      label,
+      entropy,
+      suggestions: this.getSuggestions(password),
+    };
+  },
+
+  /**
+   * Helper: Provides actionable feedback to the user
+   */
+  getSuggestions(password) {
+    const suggestions = [];
+    if (password.length < 12)
+      suggestions.push("Make it at least 12 characters long.");
+    if (!/[A-Z]/.test(password)) suggestions.push("Add uppercase letters.");
+    if (!/[0-9]/.test(password)) suggestions.push("Add numbers.");
+    if (!/[^A-Za-z0-9]/.test(password))
+      suggestions.push("Add special characters.");
+    return suggestions;
+  },
+};
