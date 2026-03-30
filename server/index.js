@@ -10,6 +10,11 @@ app.use(cors());
 
 const PORT = process.env.PORT || 3001;
 
+// Root route for health check / Render deployment fix
+app.get("/", (req, res) => {
+  res.send("Backend is running successfully 🚀");
+});
+
 // Initialize Supabase Client (Service Role for Admin Access)
 const supabase = createClient(
   process.env.SUPABASE_URL,
