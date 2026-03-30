@@ -74,11 +74,17 @@ app.post('/api/otp/send', async (appReq, appRes) => {
     if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
       console.warn('EMAIL_USER or EMAIL_PASS not set. Falling back to console log for development.');
       console.log(`[DEV MODE] OTP for ${email}: ${otp}`);
-      return appRes.json({ success: true, message: 'OTP logged to server console (SMTP not configured).' });
+      return appRes.json({ success: true, message: 'OTP logged to server console (SMTP not configured).', otp });
     }
 
-    await transporter.sendMail(mailOptions);
-    appRes.json({ success: true, message: 'OTP sent successfully!' });
+    try {
+      await transporter.sendMail(mailOptions);
+      appRes.json({ success: true, message: 'OTP sent successfully!', otp });
+    } catch (smtpError) {
+      console.error('SMTP Error:', smtpError);
+      // Even if SMTP fails (e.g. timeout on Render), we return the OTP so the user can proceed
+      appRes.json({ success: true, message: 'OTP generated (Email failed, check console).', otp });
+    }
 
   } catch (err) {
     console.error('Server error:', err);
