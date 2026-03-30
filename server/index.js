@@ -77,13 +77,18 @@ app.post('/api/otp/send', async (appReq, appRes) => {
       return appRes.json({ success: true, message: 'OTP logged to server console (SMTP not configured).', otp });
     }
 
+    // For the demo, we send the OTP immediately without waiting for SMTP
+    // This fixes the "too much time" issue on Render free tier
     try {
-      await transporter.sendMail(mailOptions);
-      appRes.json({ success: true, message: 'OTP sent successfully!', otp });
-    } catch (smtpError) {
-      console.error('SMTP Error:', smtpError);
-      // Even if SMTP fails (e.g. timeout on Render), we return the OTP so the user can proceed
-      appRes.json({ success: true, message: 'OTP generated (Email failed, check console).', otp });
+      transporter.sendMail(mailOptions).catch(err => console.error("Background SMTP Error:", err));
+      appRes.json({ 
+        success: true, 
+        message: 'OTP generated successfully (check your console if email delays).', 
+        otp 
+      });
+    } catch (err) {
+      console.error('Submission Error:', err);
+      appRes.json({ success: true, message: 'OTP generated (Email error).', otp });
     }
 
   } catch (err) {

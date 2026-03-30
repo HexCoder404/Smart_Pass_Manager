@@ -11,6 +11,9 @@ function maskEmail(email) {
 }
 
 export default function EmailOtpAuth() {
+  const API_URL = window.location.hostname === "localhost" 
+    ? "http://localhost:3001" 
+    : "https://hashsecure.onrender.com";
   const [step, setStep] = useState("request"); // request | verify
   const [email, setEmail] = useState("");
   const [token, setToken] = useState("");
@@ -40,7 +43,7 @@ export default function EmailOtpAuth() {
     e.preventDefault();
     setSubmitting(true);
     try {
-      const response = await fetch("http://localhost:3001/api/otp/send", {
+      const response = await fetch(`${API_URL}/api/otp/send`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email }),
@@ -81,7 +84,7 @@ export default function EmailOtpAuth() {
     }
     setSubmitting(true);
     try {
-      const response = await fetch("http://localhost:3001/api/otp/verify", {
+      const response = await fetch(`${API_URL}/api/otp/verify`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, otp: token }),
