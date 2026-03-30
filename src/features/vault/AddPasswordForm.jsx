@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { CryptoService } from "../../utils/crypto";
 import { supabase } from "../../utils/supabase";
 import { PasswordEngine } from "../../utils/passwordEngine";
-import { useToast } from "../../App";
+import { useToast, useAuth } from "../../App";
 
 const DEMO_SALT = new Uint8Array([15, 82, 193, 44, 55, 66, 77, 88, 99, 10, 11, 12, 13, 14, 15, 16]);
 const SESSION_TIMEOUT_MS = 5 * 60 * 1000;
@@ -64,6 +64,7 @@ const inp = {
 };
 
 export default function VaultDashboard() {
+  const { user } = useAuth();
   const [isUnlocked, setIsUnlocked]     = useState(false);
   const [masterKey, setMasterKey]       = useState(null);
   const [pinInput, setPinInput]         = useState("");
@@ -97,11 +98,16 @@ export default function VaultDashboard() {
   }, []);
 
   useEffect(() => {
+    if (!user?.email) return;
     (async () => {
-      const { data, error } = await supabase.from("vault_settings").select("*").limit(1);
+      const { data, error } = await supabase
+        .from("vault_settings")
+        .select("*")
+        .eq("owner_email", user.email)
+        .limit(1);
       if (!error) setIsNewVault(data.length === 0);
     })();
-  }, []);
+  }, [user]);
 
   const handlePinChange = (e) => {
     const val = e.target.value;
@@ -117,14 +123,27 @@ export default function VaultDashboard() {
       const key = await CryptoService.deriveKey(finalPin, DEMO_SALT);
       if (isNewVault) {
         const { ciphertext, iv } = await CryptoService.encryptData(key, AUTH_LOCK_STRING);
-        await supabase.from("vault_settings").insert([{ pin_hash: JSON.stringify({ ciphertext, iv }) }]);
+        await supabase.from("vault_settings").insert([
+          { 
+            owner_email: user.email, 
+            pin_hash: JSON.stringify({ ciphertext, iv }) 
+          }
+        ]);
         finishUnlock(key, []);
       } else {
-        const { data } = await supabase.from("vault_settings").select("pin_hash").single();
+        const { data } = await supabase
+          .from("vault_settings")
+          .select("pin_hash")
+          .eq("owner_email", user.email)
+          .single();
         const { ciphertext, iv } = JSON.parse(data.pin_hash);
         const decrypted = await CryptoService.decryptData(key, ciphertext, iv);
         if (decrypted === AUTH_LOCK_STRING) {
-          const { data: entries } = await supabase.from("vault_entries").select("*").order("created_at", { ascending: false });
+          const { data: entries } = await supabase
+            .from("vault_entries")
+            .select("*")
+            .eq("owner_email", user.email)
+            .order("created_at", { ascending: false });
           finishUnlock(key, entries || []);
         }
       }
@@ -161,6 +180,7 @@ export default function VaultDashboard() {
     const sensitiveData = JSON.stringify({ password: formData.password, description: formData.description });
     const { ciphertext, iv } = await CryptoService.encryptData(masterKey, sensitiveData);
     const payload = {
+      owner_email: user.email,
       platform_title: formData.platform_title,
       url: formData.platform_type === "Website" ? formData.url : null,
       account_label: formData.account_label,
@@ -560,7 +580,9 @@ export default function VaultDashboard() {
                 Cancel
               </button>
               <button onClick={() => {
-                supabase.from("vault_entries").delete().eq("id", deletingId)
+                supabase.from("vault_entries").delete()
+                  .eq("id", deletingId)
+                  .eq("owner_email", user.email)
                   .then(() => {
                     setVaultData(v => v.filter(i => i.id !== deletingId));
                     toast("Entry deleted forever.", "default");
