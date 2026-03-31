@@ -81,11 +81,10 @@ app.post('/api/otp/send', async (appReq, appRes) => {
       return appRes.status(500).json({ error: 'Failed to store OTP in database.' });
     }
 
-    // 6. Respond immediately with OTP (for frontend autofill)
+    // 6. Respond immediately (OTP is sent via Email ONLY for security)
     appRes.json({ 
       success: true, 
-      message: 'OTP generated successfully.', 
-      otp 
+      message: 'OTP generated and sent to your email.'
     });
 
   } catch (err) {

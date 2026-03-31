@@ -60,15 +60,7 @@ export default function EmailOtpAuth() {
 
       toast(data.message || `OTP sent to ${maskEmail(email)}.`);
       setStep("verify");
-      
-      // Demo Mode: If the server returns the OTP directly (e.g. SMTP failed/slow), auto-fill it
-      if (data.otp) {
-        console.log("DEBUG: Received OTP from server:", data.otp);
-        setToken(data.otp);
-      } else {
-        setToken("");
-      }
-      
+      setToken("");
       setCooldown(30);
     } catch (err) {
       toast("Server is unreachable. Check if it's running.", "error");
