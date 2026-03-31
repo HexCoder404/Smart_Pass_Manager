@@ -65,9 +65,17 @@ app.post('/api/otp/send', async (appReq, appRes) => {
       `,
     };
 
-    // 4. Fire off email immediately (don't wait for it)
+    // 4. Send Email (Wait for success to see if there are errors)
     if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
-      transporter.sendMail(mailOptions).catch(err => console.error("Background SMTP Error:", err));
+      try {
+        await transporter.sendMail(mailOptions);
+        console.log(`Email sent successfully to ${email}`);
+      } catch (smtpError) {
+        console.error("SMTP Error Detail:", smtpError);
+        return appRes.status(500).json({ 
+          error: `Email delivery failed: ${smtpError.message || "Unknown SMTP Error"}` 
+        });
+      }
     } else {
       console.warn('EMAIL_USER or EMAIL_PASS not set. Falling back to console log.');
       console.log(`[DEV MODE] OTP for ${email}: ${otp}`);
