@@ -136,7 +136,7 @@ export default function EmailOtpAuth() {
               style={{ width: "100%", padding: "0.85rem", fontWeight: 800 }}
               disabled={submitting}
             >
-              {submitting ? (isWakingUp ? "Waking up server..." : "Sending OTP…") : "Send Access Code"}
+              {submitting ? (isWakingUp ? "Almost there..." : "Sending OTP…") : "Send Access Code"}
             </button>
           </form>
         ) : (
