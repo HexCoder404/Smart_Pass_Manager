@@ -1,16 +1,56 @@
-# React + Vite
+# Smart Pass Manager (HashSecure)
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A modern, secure, and beautiful password manager built with React, Vite, Express, and Supabase.
 
-Currently, two official plugins are available:
+## 🚀 Getting Started
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+If you've just cloned this repository, follow these steps to get everything running locally.
 
-## React Compiler
+### 1. Install Dependencies
+In the root directory of the project, run:
+```bash
+npm install
+```
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+### 2. Database Setup (Supabase)
+This project uses **Supabase** for its database.
+1. Create a new project on [Supabase](https://supabase.com).
+2. Go to the **SQL Editor** in your Supabase dashboard.
+3. Copy the contents of [`database.sql`](file:///c:/Users/viraj/OneDrive/Desktop/Smart_Pass_Manager/database.sql) into the SQL editor and run it. This will create the necessary tables and disable RLS (Row Level Security) for testing.
 
-## Expanding the ESLint configuration
+### 3. Environment Variables
+You need to set up environment variables for both the frontend and the backend.
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+#### Frontend (.env.local)
+Create a file named `.env.local` in the **root** directory and add:
+```env
+VITE_SUPABASE_URL=your_supabase_project_url
+VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
+```
+
+#### Backend (server/.env)
+Create a file named `.env` inside the `server/` directory and add:
+```env
+PORT=3001
+SUPABASE_URL=your_supabase_project_url
+SUPABASE_ANON_KEY=your_supabase_anon_key
+SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
+EMAIL_USER=your_gmail@gmail.com
+EMAIL_PASS=your_gmail_app_password
+```
+*(Note: Use a Gmail App Password, not your regular password, for SMTP to work.)*
+
+### 4. Run the Project
+Start both the React frontend and the Express backend simultaneously with one command:
+```bash
+npm run dev-all
+```
+
+## 🛠 Features
+- **OTP Authentication**: Login securely via email-based one-time passwords.
+- **Vault Management**: Add, view, and manage your passwords securely.
+- **Vault PIN**: Encrypt your vault access with a personal PIN.
+- **Modern UI**: Built with TailwindCSS and Vite for a lightning-fast experience.
+
+---
+Created by [HexCoder404](https://github.com/HexCoder404)

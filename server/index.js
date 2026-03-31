@@ -41,18 +41,12 @@ app.post('/api/otp/send', async (appReq, appRes) => {
   const otp = Math.floor(100000 + Math.random() * 900000).toString();
 
   try {
-    // 2. Store OTP in Supabase (we'll ensure the table exists or prompt user)
-    // We'll use a table named 'user_otps'
-    const { error: dbError } = await supabase
+    // 2. Start Database & Email operations simultaneously for speed
+    const dbPromise = supabase
       .from('user_otps')
       .upsert({ email, otp, created_at: new Date().toISOString() }, { onConflict: 'email' });
 
-    if (dbError) {
-      console.error('Database error:', dbError);
-      return appRes.status(500).json({ error: 'Failed to store OTP in database.' });
-    }
-
-    // 3. Send Email
+    // 3. Prepare Email
     const mailOptions = {
       from: `"HashSecure" <${process.env.EMAIL_USER}>`,
       to: email,
@@ -71,25 +65,28 @@ app.post('/api/otp/send', async (appReq, appRes) => {
       `,
     };
 
-    if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
-      console.warn('EMAIL_USER or EMAIL_PASS not set. Falling back to console log for development.');
+    // 4. Fire off email immediately (don't wait for it)
+    if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
+      transporter.sendMail(mailOptions).catch(err => console.error("Background SMTP Error:", err));
+    } else {
+      console.warn('EMAIL_USER or EMAIL_PASS not set. Falling back to console log.');
       console.log(`[DEV MODE] OTP for ${email}: ${otp}`);
-      return appRes.json({ success: true, message: 'OTP logged to server console (SMTP not configured).', otp });
     }
 
-    // For the demo, we send the OTP immediately without waiting for SMTP
-    // This fixes the "too much time" issue on Render free tier
-    try {
-      transporter.sendMail(mailOptions).catch(err => console.error("Background SMTP Error:", err));
-      appRes.json({ 
-        success: true, 
-        message: 'OTP generated successfully (check your console if email delays).', 
-        otp 
-      });
-    } catch (err) {
-      console.error('Submission Error:', err);
-      appRes.json({ success: true, message: 'OTP generated (Email error).', otp });
+    // 5. Wait for Database to confirm storage
+    const { error: dbError } = await dbPromise;
+
+    if (dbError) {
+      console.error('Database error:', dbError);
+      return appRes.status(500).json({ error: 'Failed to store OTP in database.' });
     }
+
+    // 6. Respond immediately with OTP (for frontend autofill)
+    appRes.json({ 
+      success: true, 
+      message: 'OTP generated successfully.', 
+      otp 
+    });
 
   } catch (err) {
     console.error('Server error:', err);

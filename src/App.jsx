@@ -13,6 +13,7 @@ import VaultDashboard from './features/vault/AddPasswordForm';
 import Landing from "./features/landing/Landing";
 import EmailOtpAuth from "./features/auth/EmailOtpAuth";
 import { supabase } from "./utils/supabase";
+import { API_URL } from "./utils/constants";
 
 /* ── Toast Context ──────────────────────────────────────────────────────── */
 export const ToastContext = createContext(null);
@@ -315,6 +316,30 @@ function MainTools() {
 /* ── App Root ────────────────────────────────────────────────────────────── */
 function AppContent() {
   const location = useLocation();
+
+  // 🚨 If Supabase is not initialized, show a setup screen instead of a blank page
+  if (!supabase) {
+    return (
+      <div style={{
+        minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center",
+        backgroundColor: "hsl(var(--background))", padding: "2rem", textAlign: "center"
+      }}>
+        <div className="card" style={{ maxWidth: "500px", padding: "3rem", borderTop: "4px solid hsl(var(--destructive))" }}>
+          <div style={{ fontSize: "3rem", marginBottom: "1rem" }}>⚙️</div>
+          <h2 style={{ fontSize: "1.5rem", fontWeight: "800", marginBottom: "1rem" }}>Configuration Required</h2>
+          <p style={{ color: "hsl(var(--muted-foreground))", marginBottom: "2rem", lineHeight: "1.6" }}>
+            The app couldn't find your <strong>Supabase</strong> environment variables. 
+            If you've already added them to your dashboard (Vercel/Netlify), make sure to <strong>trigger a new deployment</strong>.
+          </p>
+          <div style={{ backgroundColor: "hsl(var(--muted))", padding: "1rem", borderRadius: "10px", fontSize: "0.85rem", textAlign: "left", fontFamily: "monospace" }}>
+            1. VITE_SUPABASE_URL<br />
+            2. VITE_SUPABASE_ANON_KEY
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="bg-background" style={{ minHeight: "100vh" }}>
       <Navbar />
@@ -354,6 +379,11 @@ function AppContent() {
 }
 
 export default function App() {
+  // Pre-warm the backend on load to wake up Cold Starts (Render/Heroku/etc)
+  useEffect(() => {
+    fetch(API_URL).catch(() => {}); // silent ping
+  }, []);
+
   return (
     <ThemeProvider>
       <ToastProvider>

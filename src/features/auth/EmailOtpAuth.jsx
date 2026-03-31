@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { supabase } from "../../utils/supabase";
 import { useAuth, useToast } from "../../App";
+import { API_URL } from "../../utils/constants";
 
 function maskEmail(email) {
   const [name, domain] = email.split("@");
@@ -11,13 +12,11 @@ function maskEmail(email) {
 }
 
 export default function EmailOtpAuth() {
-  const API_URL = window.location.hostname === "localhost" 
-    ? "http://localhost:3001" 
-    : "https://hashsecure.onrender.com";
   const [step, setStep] = useState("request"); // request | verify
   const [email, setEmail] = useState("");
   const [token, setToken] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [isWakingUp, setIsWakingUp] = useState(false);
   const [cooldown, setCooldown] = useState(0);
 
   const { toast } = useToast();
@@ -40,8 +39,12 @@ export default function EmailOtpAuth() {
   }, [cooldown]);
 
   const requestOtp = async (e) => {
-    e.preventDefault();
+    e?.preventDefault();
     setSubmitting(true);
+    
+    // UI improvement: Show a waking up message if it takes > 2s
+    const wakeUpTimer = setTimeout(() => setIsWakingUp(true), 2000);
+    
     try {
       const response = await fetch(`${API_URL}/api/otp/send`, {
         method: "POST",
@@ -70,6 +73,8 @@ export default function EmailOtpAuth() {
     } catch (err) {
       toast("Server is unreachable. Check if it's running.", "error");
     } finally {
+      clearTimeout(wakeUpTimer);
+      setIsWakingUp(false);
       setSubmitting(false);
     }
   };
@@ -139,7 +144,7 @@ export default function EmailOtpAuth() {
               style={{ width: "100%", padding: "0.85rem", fontWeight: 800 }}
               disabled={submitting}
             >
-              {submitting ? "Sending OTP…" : "Send Access Code"}
+              {submitting ? (isWakingUp ? "Waking up server..." : "Sending OTP…") : "Send Access Code"}
             </button>
           </form>
         ) : (
