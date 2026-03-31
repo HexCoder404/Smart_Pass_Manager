@@ -51,6 +51,7 @@ app.post('/api/otp/send', async (appReq, appRes) => {
       from: `"HashSecure" <${process.env.EMAIL_USER}>`,
       to: email,
       subject: 'Your OTP for HashSecure',
+      text: `Your HashSecure Access Code: ${otp}`,
       html: `
         <div style="font-family: sans-serif; padding: 20px; color: #333;">
           <h2 style="color: #10b981;">HashSecure Access</h2>
