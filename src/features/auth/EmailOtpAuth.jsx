@@ -18,6 +18,7 @@ export default function EmailOtpAuth() {
   const [submitting, setSubmitting] = useState(false);
   const [isWakingUp, setIsWakingUp] = useState(false);
   const [cooldown, setCooldown] = useState(0);
+  const [isBackendWarm, setIsBackendWarm] = useState(false);
 
   const { toast } = useToast();
   const { user } = useAuth();
@@ -37,6 +38,20 @@ export default function EmailOtpAuth() {
     const t = setInterval(() => setCooldown((s) => Math.max(0, s - 1)), 1000);
     return () => clearInterval(t);
   }, [cooldown]);
+
+  useEffect(() => {
+    // Pre-warm Render backend as soon as auth screen opens.
+    // This reduces cold-start delay when user clicks "Send Access Code".
+    const warm = async () => {
+      try {
+        await fetch(`${API_URL}/api/health`, { cache: "no-store" });
+        setIsBackendWarm(true);
+      } catch (_err) {
+        // Ignore warm-up errors here; actual submit path handles failures.
+      }
+    };
+    warm();
+  }, []);
 
   const requestOtp = async (e) => {
     e?.preventDefault();
@@ -138,6 +153,11 @@ export default function EmailOtpAuth() {
             >
               {submitting ? (isWakingUp ? "Almost there..." : "Sending OTP…") : "Send Access Code"}
             </button>
+            {!isBackendWarm && (
+              <p className="text-muted-foreground" style={{ marginTop: "0.65rem", fontSize: "0.78rem" }}>
+                Warming server for faster OTP delivery...
+              </p>
+            )}
           </form>
         ) : (
           <form onSubmit={verifyOtp}>
