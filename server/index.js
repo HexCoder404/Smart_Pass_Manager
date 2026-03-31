@@ -1,4 +1,4 @@
-require('dotenv').config({ path: './server/.env' });
+require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const { createClient } = require('@supabase/supabase-js');
@@ -11,6 +11,14 @@ const PORT = process.env.PORT || 3001;
 const EMAIL_PROVIDER = (process.env.EMAIL_PROVIDER || 'brevo').toLowerCase(); // brevo | resend
 const OTP_FROM_EMAIL = process.env.OTP_FROM_EMAIL || 'no-reply@hashsecure.app';
 const OTP_FROM_NAME = process.env.OTP_FROM_NAME || 'HashSecure';
+
+console.log("Boot config:", {
+  EMAIL_PROVIDER,
+  hasBrevoKey: Boolean(process.env.BREVO_API_KEY),
+  brevoKeyLength: process.env.BREVO_API_KEY ? process.env.BREVO_API_KEY.length : 0,
+  hasResendKey: Boolean(process.env.RESEND_API_KEY),
+  hasSupabaseUrl: Boolean(process.env.SUPABASE_URL),
+});
 
 // Root route for health check / Render deployment fix
 app.get("/", (req, res) => {
