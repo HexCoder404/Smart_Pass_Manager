@@ -6,4 +6,4 @@
  */
 export const API_URL = window.location.hostname === "localhost" 
   ? "http://localhost:3001" 
-  : "https://hashsecure.onrender.com";
+  : "https://smart-pass-manager.onrender.com";
