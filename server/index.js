@@ -36,23 +36,26 @@ app.post('/api/otp/send', async (appReq, appRes) => {
       .from('user_otps')
       .upsert({ email, otp, created_at: new Date().toISOString() }, { onConflict: 'email' });
 
-    // 4. Send Email via Resend API (HTTP instead of SMTP)
-    const RESEND_API_KEY = process.env.RESEND_API_KEY;
+    // 4. Send Email via Brevo API (HTTP instead of SMTP)
+    const BREVO_API_KEY = process.env.BREVO_API_KEY;
 
-    if (RESEND_API_KEY) {
+    if (BREVO_API_KEY) {
       try {
-        const response = await fetch('https://api.resend.com/emails', {
+        const response = await fetch('https://api.brevo.com/v3/smtp/email', {
           method: 'POST',
           headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${RESEND_API_KEY}`
+            'accept': 'application/json',
+            'api-key': BREVO_API_KEY,
+            'content-type': 'application/json'
           },
           body: JSON.stringify({
-            from: 'onboarding@resend.dev',
-            to: email,
-            subject: 'Your OTP for HashSecure',
-            text: `Your HashSecure Access Code: ${otp}`,
-            html: `
+            sender: {
+              name: "HashSecure Vault",
+              email: "virajxgithub@gmail.com" // This must be verified in Brevo
+            },
+            to: [{ email: email }],
+            subject: "Your OTP for HashSecure",
+            htmlContent: `
               <div style="font-family: sans-serif; padding: 20px; color: #333;">
                 <h2 style="color: #10b981;">HashSecure Access</h2>
                 <p>You requested a one-time password to access your vault.</p>
@@ -69,16 +72,17 @@ app.post('/api/otp/send', async (appReq, appRes) => {
 
         if (!response.ok) {
           const errorData = await response.json();
-          throw new Error(errorData.message || 'Resend API Error');
+          console.error("Brevo API Error Response:", errorData);
+          throw new Error(errorData.message || 'Brevo API Error');
         }
 
-        console.log(`Email sent successfully via Resend to ${email}`);
+        console.log(`Email sent successfully via Brevo to ${email}`);
       } catch (sendError) {
-        console.error("Resend delivery failed:", sendError);
+        console.error("Brevo delivery failed:", sendError);
         return appRes.status(500).json({ error: `Email delivery failed: ${sendError.message}` });
       }
     } else {
-      console.warn('RESEND_API_KEY not set. Falling back to console log.');
+      console.warn('BREVO_API_KEY not set. Falling back to console log.');
       console.log(`[DEV MODE] OTP for ${email}: ${otp}`);
     }
 
