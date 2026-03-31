@@ -1,11 +1,12 @@
-require('dotenv').config();
+const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '.env') });
 const express = require('express');
 const cors = require('cors');
 const { createClient } = require('@supabase/supabase-js');
 
 const app = express();
 app.use(express.json());
-app.use(cors());
+app.use(cors());``
 
 const PORT = process.env.PORT || 3001;
 const EMAIL_PROVIDER = (process.env.EMAIL_PROVIDER || 'brevo').toLowerCase(); // brevo | resend
@@ -135,6 +136,7 @@ app.post('/api/otp/send', async (appReq, appRes) => {
 
   // 1. Generate a 6-digit OTP
   const otp = Math.floor(100000 + Math.random() * 900000).toString();
+  console.log(`\n🔐 OTP Generated for ${email}: \x1b[1m\x1b[92m${otp}\x1b[0m (expires in 10 min)\n`);
 
   try {
     // 2. Start Database & Email operations simultaneously for speed
