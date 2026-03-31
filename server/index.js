@@ -1,6 +1,5 @@
 require('dotenv').config({ path: './server/.env' });
 const express = require('express');
-const nodemailer = require('nodemailer');
 const cors = require('cors');
 const { createClient } = require('@supabase/supabase-js');
 
@@ -15,26 +14,11 @@ app.get("/", (req, res) => {
   res.send("Backend is running successfully 🚀");
 });
 
-// Initialize Supabase Client (Service Role for Admin Access)
+// Initialize Supabase Client (Service Role for Admin Access if available)
 const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY
 );
-
-// Setup Nodemailer with Port 587 (STARTTLS) and Timeouts for reliability
-const transporter = nodemailer.createTransport({
-  host: 'smtp.gmail.com',
-  port: 587,
-  secure: false, // Use STARTTLS on 587
-  pool: true,
-  connectionTimeout: 10000, // 10 second timeout
-  greetingTimeout: 10000,
-  maxConnections: 5,
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS,
-  },
-});
 
 /**
  * Endpoint: Send OTP
@@ -52,39 +36,49 @@ app.post('/api/otp/send', async (appReq, appRes) => {
       .from('user_otps')
       .upsert({ email, otp, created_at: new Date().toISOString() }, { onConflict: 'email' });
 
-    // 3. Prepare Email
-    const mailOptions = {
-      from: `"HashSecure" <${process.env.EMAIL_USER}>`,
-      to: email,
-      subject: 'Your OTP for HashSecure',
-      text: `Your HashSecure Access Code: ${otp}`,
-      html: `
-        <div style="font-family: sans-serif; padding: 20px; color: #333;">
-          <h2 style="color: #10b981;">HashSecure Access</h2>
-          <p>You requested a one-time password to access your vault.</p>
-          <div style="background: #f4f4f5; padding: 15px; border-radius: 8px; font-size: 24px; font-weight: bold; text-align: center; letter-spacing: 5px;">
-            ${otp}
-          </div>
-          <p style="font-size: 14px; color: #666; margin-top: 20px;">
-            This code will expire shortly. If you did not request this, please ignore this email.
-          </p>
-        </div>
-      `,
-    };
+    // 4. Send Email via Resend API (HTTP instead of SMTP)
+    const RESEND_API_KEY = process.env.RESEND_API_KEY;
 
-    // 4. Send Email (Wait for success to see if there are errors)
-    if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
+    if (RESEND_API_KEY) {
       try {
-        await transporter.sendMail(mailOptions);
-        console.log(`Email sent successfully to ${email}`);
-      } catch (smtpError) {
-        console.error("SMTP Error Detail:", smtpError);
-        return appRes.status(500).json({ 
-          error: `Email delivery failed: ${smtpError.message || "Unknown SMTP Error"}` 
+        const response = await fetch('https://api.resend.com/emails', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${RESEND_API_KEY}`
+          },
+          body: JSON.stringify({
+            from: 'onboarding@resend.dev',
+            to: email,
+            subject: 'Your OTP for HashSecure',
+            text: `Your HashSecure Access Code: ${otp}`,
+            html: `
+              <div style="font-family: sans-serif; padding: 20px; color: #333;">
+                <h2 style="color: #10b981;">HashSecure Access</h2>
+                <p>You requested a one-time password to access your vault.</p>
+                <div style="background: #f4f4f5; padding: 15px; border-radius: 8px; font-size: 24px; font-weight: bold; text-align: center; letter-spacing: 5px;">
+                  ${otp}
+                </div>
+                <p style="font-size: 14px; color: #666; margin-top: 20px;">
+                  This code will expire shortly. If you did not request this, please ignore this email.
+                </p>
+              </div>
+            `
+          })
         });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.message || 'Resend API Error');
+        }
+
+        console.log(`Email sent successfully via Resend to ${email}`);
+      } catch (sendError) {
+        console.error("Resend delivery failed:", sendError);
+        return appRes.status(500).json({ error: `Email delivery failed: ${sendError.message}` });
       }
     } else {
-      console.warn('EMAIL_USER or EMAIL_PASS not set. Falling back to console log.');
+      console.warn('RESEND_API_KEY not set. Falling back to console log.');
       console.log(`[DEV MODE] OTP for ${email}: ${otp}`);
     }
 
